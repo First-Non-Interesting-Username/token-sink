@@ -219,6 +219,14 @@ async def dequeue(
     """Lease up to ``limit`` pending tasks for ``owner``.
 
     Only tasks whose dependencies are completed are eligible.
+
+    The returned :class:`mavr.schemas.entities.Task` carries a synthetic
+    ``lease_owner`` of the form ``"{owner}:{token}"``; the token is a
+    per-lease random secret generated here. Callers MUST use this exact
+    string as the ``lease_owner`` argument on :func:`heartbeat`,
+    :func:`start`, :func:`complete`, and :func:`fail` so that those
+    operations are correctly attributed to the worker that won the
+    lease.
     """
     if limit < 1:
         raise ValueError("limit must be >= 1")
@@ -279,6 +287,52 @@ async def dequeue(
     if leased:
         await conn.commit()
     return leased
+
+
+async def reacquire_lease_by_id(
+    conn: aiosqlite.Connection,
+    *,
+    task_id: str,
+    owner: str,
+    lease_policy: LeasePolicy | None = None,
+) -> schema.Task | None:
+    """Re-lease a specific task by id (used by the runtime between attempts).
+
+    Atomic: only one worker can transition the row from ``pending`` /
+    ``failed`` back to ``leased``. Returns the leased task with a fresh
+    ``lease_owner`` of the form ``"{owner}:{token}"``, or ``None`` if
+    the row is in any other state (including leased by another worker).
+
+    This is intentionally not implemented as a dequeue-by-kind: a
+    transient retry MUST end up holding the same task, even when
+    sibling tasks of the same kind exist in the queue.
+    """
+    policy = lease_policy or LeasePolicy()
+    now = _now()
+    expires = now + timedelta(seconds=policy.lease_ttl_seconds)
+    token = _new_lease_token()
+    now_iso = _iso(now)
+    expires_iso = _iso(expires)
+    cur = await conn.execute(
+        "UPDATE tasks SET status = ?, lease_owner = ?, lease_expires_at = ?, "
+        "lease_heartbeat_at = ?, updated_at = ? "
+        "WHERE id = ? AND status IN ('pending','failed')",
+        (
+            schema.TaskStatus.LEASED.value,
+            f"{owner}:{token}",
+            expires_iso,
+            now_iso,
+            now_iso,
+            task_id,
+        ),
+    )
+    if cur.rowcount != 1:
+        await conn.commit()
+        return None
+    await conn.commit()
+    row = await (await conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))).fetchone()
+    assert row is not None
+    return _row_to_task(row)
 
 
 # ---- lease lifecycle ------------------------------------------------------

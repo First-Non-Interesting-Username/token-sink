@@ -138,3 +138,34 @@ async def test_lease_round_trip(migrated_db, campaign_id) -> None:
         assert ok
         again = await lifecycle.lease(conn, finding_id=f.id, owner=other)
         assert again is not None
+
+
+@pytest.mark.asyncio
+async def test_lease_does_not_clobber_concurrent_transition_metadata(
+    migrated_db, campaign_id
+) -> None:
+    """Regression: leases must be independent of finding_transitions.
+
+    A concurrent transition() between lease() and release_lease() must
+    not modify or be modified by the lease row.
+    """
+    async with migrated_db.acquire() as conn:
+        f = await lifecycle.insert(conn, campaign_id=campaign_id, title="t")
+        lease = await lifecycle.lease(conn, finding_id=f.id, owner=ACTOR)
+        assert lease is not None
+        f = await lifecycle.transition(
+            conn,
+            finding_id=f.id,
+            new_state=schema.FindingState.REVIEW_CYCLE_1,
+            actor_id=ACTOR,
+            metadata={"note": "in-flight review"},
+        )
+        # lease is still live; the most-recent transition metadata must
+        # not have absorbed a lease key.
+        history = await lifecycle.history(conn, f.id)
+        last = history[-1]
+        assert "lease" not in last["metadata"]
+        assert last["metadata"]["note"] == "in-flight review"
+        # and release_lease still works
+        ok = await lifecycle.release_lease(conn, finding_id=f.id, owner=ACTOR)
+        assert ok

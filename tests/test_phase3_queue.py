@@ -178,3 +178,59 @@ async def test_dependency_satisfied_after_completion(migrated_db, campaign_id) -
         await queue.complete(conn, task_id=a.id, lease_owner=leased_a.lease_owner)
         leased_b = await queue.dequeue(conn, owner="w2")
         assert [t.id for t in leased_b] == [b.id]
+
+
+@pytest.mark.asyncio
+async def test_reacquire_lease_by_id_returns_same_task(
+    migrated_db, campaign_id
+) -> None:
+    """A transient retry must re-lease the same task id, not a sibling."""
+    async with migrated_db.acquire() as conn:
+        a = await queue.enqueue(
+            conn, campaign_id=campaign_id, kind=schema.TaskKind.SEARCH
+        )
+        b = await queue.enqueue(
+            conn, campaign_id=campaign_id, kind=schema.TaskKind.SEARCH
+        )
+        # dequeue by kind — which one wins depends on created_at, but
+        # both exist so the next dequeue would otherwise grab the other.
+        [leased_a] = await queue.dequeue(conn, owner="w1", kinds=[schema.TaskKind.SEARCH])
+        assert leased_a.id == a.id
+        # release to pending via requeue path
+        await queue.fail(
+            conn, task_id=a.id, lease_owner=leased_a.lease_owner, error="x", classification="transient"
+        )
+        await queue.requeue(conn, task_id=a.id, classification="transient")
+        # reacquire by id should return a, not b
+        renewed = await queue.reacquire_lease_by_id(
+            conn, task_id=a.id, owner="w1"
+        )
+        assert renewed is not None
+        assert renewed.id == a.id
+        # and b is still pending
+        current_b = await queue.get(conn, b.id)
+        assert current_b.status == schema.TaskStatus.PENDING
+
+
+@pytest.mark.asyncio
+async def test_reacquire_lease_by_id_refuses_leased_or_terminal(
+    migrated_db, campaign_id
+) -> None:
+    async with migrated_db.acquire() as conn:
+        a = await queue.enqueue(
+            conn, campaign_id=campaign_id, kind=schema.TaskKind.SEARCH
+        )
+        [leased_a] = await queue.dequeue(conn, owner="w1", kinds=[schema.TaskKind.SEARCH])
+        # currently leased to w1 — reacquire by w2 should fail
+        blocked = await queue.reacquire_lease_by_id(
+            conn, task_id=a.id, owner="w2"
+        )
+        assert blocked is None
+        # complete it; terminal -> refused too
+        await queue.complete(
+            conn, task_id=a.id, lease_owner=leased_a.lease_owner
+        )
+        blocked2 = await queue.reacquire_lease_by_id(
+            conn, task_id=a.id, owner="w2"
+        )
+        assert blocked2 is None

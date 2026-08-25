@@ -483,12 +483,14 @@ async def _fetch_kill_switch(conn: aiosqlite.Connection) -> KillSwitchState:
 async def _reacquire_lease(
     conn: aiosqlite.Connection, task: schema.Task, new_owner: str
 ) -> schema.Task | None:
-    """After a transient failure, re-lease the task for the next attempt."""
-    renewed = await queue.dequeue(conn, owner=new_owner, kinds=[task.kind], limit=1)
-    for cand in renewed:
-        if cand.id == task.id:
-            return cand
-    return None
+    """After a transient failure, re-lease the task for the next attempt.
+
+    Leases by id (not by kind) so a retry always grabs the same task,
+    not a sibling. See :func:`mavr.orchestrator.queue.reacquire_lease_by_id`.
+    """
+    return await queue.reacquire_lease_by_id(
+        conn, task_id=task.id, owner=new_owner
+    )
 
 
 # ---- subagent spawning ----------------------------------------------------
@@ -514,11 +516,15 @@ async def spawn_subagent(
     parent: schema.Agent,
     request: SubagentRequest,
     task: schema.Task | None = None,
-) -> schema.Agent:
-    """Mint a child agent and link it to ``parent``.
+) -> tuple[schema.Agent, schema.Task]:
+    """Mint a child agent, link it to ``parent``, and enqueue a task for it.
 
-    The child is queued (not yet leased) and an audit event records the
-    parent linkage.
+    Returns ``(child, spawned_task)``. The spawned task is a generic
+    :class:`mavr.schemas.entities.Task` whose ``payload`` carries the
+    objective, allowed tools, scope, and completion criteria. The child
+    agent will not actually run until a worker dequeues and dispatches
+    the task — this keeps the spawn step observable through the same
+    audit/queue paths as every other unit of work.
     """
     child = identity_mod.spawn_subagent(
         request.role,
@@ -538,10 +544,42 @@ async def spawn_subagent(
     from mavr.orchestrator import agents as agents_mod
 
     await agents_mod.insert(conn, child)
-    if task is not None:
-        # Mark the parent task's metadata with the new subagent id.
-        await conn.execute(
-            "UPDATE tasks SET result = COALESCE(result, '{}') WHERE id = ?",
-            (task.id,),
+    if parent.campaign_id is None:
+        raise ValueError(
+            "spawn_subagent requires the parent agent to have a campaign_id"
         )
-    return child
+    spawned = await queue.enqueue(
+        conn,
+        campaign_id=parent.campaign_id,
+        kind=schema.TaskKind.GENERIC,
+        parent_task_id=task.id if task is not None else None,
+        payload={
+            "agent_id": child.id,
+            "parent_agent_id": parent.id,
+            "role": request.role.value,
+            "objective": request.objective,
+            "allowed_tools": list(request.allowed_tools),
+            "scope": request.scope,
+            "active_testing_allowed": request.active_testing_allowed,
+            "completion_criteria": request.completion_criteria,
+            "timeout_seconds": request.timeout_seconds,
+        },
+        idempotency_key=f"spawn:{child.id}",
+    )
+    await audit.record(
+        conn,
+        actor_id=parent.id,
+        actor_kind=schema.ActorKind.AGENT,
+        category=schema.AuditCategory.STATE_TRANSITION,
+        subject_kind="agent",
+        subject_id=child.id,
+        prior_state=None,
+        new_state=schema.AgentStatus.QUEUED.value,
+        reason="subagent spawned",
+        metadata={
+            "parent_agent_id": parent.id,
+            "task_id": spawned.id,
+            "role": request.role.value,
+        },
+    )
+    return child, spawned

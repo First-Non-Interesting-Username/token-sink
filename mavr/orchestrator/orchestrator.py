@@ -255,7 +255,7 @@ class Orchestrator:
         *,
         parent: schema.Agent,
         request: runtime.SubagentRequest,
-    ) -> schema.Agent:
+    ) -> tuple[schema.Agent, schema.Task]:
         async with self._conn() as conn:
             return await runtime.spawn_subagent(conn, parent=parent, request=request)
 

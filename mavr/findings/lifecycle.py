@@ -349,57 +349,47 @@ def _new_lease_token() -> str:
     return f"flease_{secrets.token_urlsafe(16)}"
 
 
+def _iso(dt: datetime) -> str:
+    return dt.astimezone(UTC).isoformat()
+
+
+async def _active_lease(
+    conn: aiosqlite.Connection, finding_id: str
+) -> aiosqlite.Row | None:
+    cur = await conn.execute(
+        "SELECT id, owner, token, expires_at FROM finding_leases "
+        "WHERE finding_id = ? AND released_at IS NULL "
+        "ORDER BY acquired_at DESC LIMIT 1",
+        (finding_id,),
+    )
+    return await cur.fetchone()
+
+
 async def lease(
     conn: aiosqlite.Connection, *, finding_id: str, owner: str, ttl_seconds: int = 300
 ) -> FindingLease | None:
     """Acquire an exclusive lease on a finding's state machine.
 
-    Stored in ``finding_transitions.metadata`` (in-memory for now; a
-    dedicated table can replace this in a later phase if needed).
+    Leases are stored in the dedicated ``finding_leases`` table (see
+    migration 0003). Re-leasing is allowed for the same owner; a
+    different owner can only acquire if no live lease exists or the
+    live lease has expired.
     """
-    cur = await conn.execute(
-        "SELECT id, metadata FROM finding_transitions WHERE finding_id = ? "
-        "ORDER BY created_at DESC LIMIT 1",
-        (finding_id,),
-    )
-    row = await cur.fetchone()
-    existing_meta = json.loads(row["metadata"]) if row and row["metadata"] else {}
-    lease_block = existing_meta.get("lease")
-    if lease_block and lease_block.get("expires_at"):
-        expires = datetime.fromisoformat(lease_block["expires_at"])
-        if expires > _now() and lease_block.get("owner") != owner:
+    now = _now()
+    live = await _active_lease(conn, finding_id)
+    if live is not None:
+        live_expires = datetime.fromisoformat(live["expires_at"])
+        if live_expires > now and live["owner"] != owner:
             return None
     token = _new_lease_token()
-    expires_at = _now().replace(microsecond=0)
-    expires_at = datetime.fromtimestamp(expires_at.timestamp() + ttl_seconds, tz=UTC)
-    new_meta = dict(existing_meta)
-    new_meta["lease"] = {
-        "owner": owner,
-        "token": token,
-        "expires_at": expires_at.isoformat(),
-    }
-    # We re-record the most-recent transition with the updated metadata.
-    # For a stateless representation, this is sufficient for the Phase 3
-    # local loop; later phases can introduce a dedicated leases table.
-    if row is None:
-        await conn.execute(
-            "INSERT INTO finding_transitions("
-            "id, finding_id, prior_state, new_state, reason, actor_id, actor_kind, metadata, created_at"
-            ") VALUES (?, ?, NULL, ?, 'lease', NULL, ?, ?, ?)",
-            (
-                str(uuid4()),
-                finding_id,
-                schema.FindingState.INITIAL.value,
-                schema.ActorKind.SYSTEM.value,
-                json.dumps(new_meta, ensure_ascii=False),
-                _now().isoformat(),
-            ),
-        )
-    else:
-        await conn.execute(
-            "UPDATE finding_transitions SET metadata = ? WHERE id = ?",
-            (json.dumps(new_meta, ensure_ascii=False), row["id"]),
-        )
+    expires_at = datetime.fromtimestamp(now.timestamp() + ttl_seconds, tz=UTC)
+    lease_id = str(uuid4())
+    await conn.execute(
+        "INSERT INTO finding_leases("
+        "id, finding_id, owner, token, acquired_at, expires_at, released_at"
+        ") VALUES (?, ?, ?, ?, ?, ?, NULL)",
+        (lease_id, finding_id, owner, token, _iso(now), _iso(expires_at)),
+    )
     await conn.commit()
     return FindingLease(finding_id=finding_id, owner=owner, token=token, expires_at=expires_at)
 
@@ -407,25 +397,21 @@ async def lease(
 async def release_lease(
     conn: aiosqlite.Connection, *, finding_id: str, owner: str
 ) -> bool:
+    """Release every live lease for ``owner`` on this finding.
+
+    The previous design mutated a single transition row's metadata and
+    could clobber (or be clobbered by) a concurrent
+    :func:`transition`. Leases now live in their own table, so
+    ownership is decoupled from the append-only transition log.
+    """
+    now_iso = _iso(_now())
     cur = await conn.execute(
-        "SELECT id, metadata FROM finding_transitions WHERE finding_id = ? "
-        "ORDER BY created_at DESC LIMIT 1",
-        (finding_id,),
-    )
-    row = await cur.fetchone()
-    if row is None:
-        return False
-    meta = json.loads(row["metadata"]) if row["metadata"] else {}
-    lease_block = meta.get("lease")
-    if not lease_block or lease_block.get("owner") != owner:
-        return False
-    meta.pop("lease", None)
-    await conn.execute(
-        "UPDATE finding_transitions SET metadata = ? WHERE id = ?",
-        (json.dumps(meta, ensure_ascii=False), row["id"]),
+        "UPDATE finding_leases SET released_at = ? "
+        "WHERE finding_id = ? AND owner = ? AND released_at IS NULL",
+        (now_iso, finding_id, owner),
     )
     await conn.commit()
-    return True
+    return cur.rowcount > 0
 
 
 # ---- artifacts ------------------------------------------------------------

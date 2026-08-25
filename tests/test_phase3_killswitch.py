@@ -31,6 +31,26 @@ def test_redaction_masks_secrets_recursively() -> None:
     assert out["list"][1] == "plain"
 
 
+def test_redaction_masks_common_credential_variants() -> None:
+    payload = {
+        "JWT": "eyJ.payload.sig",
+        "bearer": "abc",
+        "access_token": "tok",
+        "refresh_token": "rtok",
+        "id_token": "itok",
+        "client_secret": "cs",
+        "safe_field": "keep me",
+    }
+    out = redact(payload)
+    assert out["JWT"] == "***REDACTED***"
+    assert out["bearer"] == "***REDACTED***"
+    assert out["access_token"] == "***REDACTED***"
+    assert out["refresh_token"] == "***REDACTED***"
+    assert out["id_token"] == "***REDACTED***"
+    assert out["client_secret"] == "***REDACTED***"
+    assert out["safe_field"] == "keep me"
+
+
 @pytest.mark.asyncio
 async def test_kill_switch_round_trip(migrated_db) -> None:
     async with migrated_db.acquire() as conn:
@@ -53,7 +73,7 @@ async def test_orchestrator_cancel_propagates(orchestrator, campaign_id) -> None
     parent = await orchestrator.register_agent(
         role=schema.AgentRole.IMPACT, campaign_id=campaign_id
     )
-    child = await orchestrator.spawn_subagent(
+    child, _task = await orchestrator.spawn_subagent(
         parent=parent,
         request=runtime.SubagentRequest(objective="helper"),
     )
@@ -61,6 +81,33 @@ async def test_orchestrator_cancel_propagates(orchestrator, campaign_id) -> None
     # cancel subtree
     n = await orchestrator.cancel_agent(parent.id, reason="halt")
     assert n == 2
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_spawn_subagent_enqueues_task(
+    orchestrator, campaign_id
+) -> None:
+    parent = await orchestrator.register_agent(
+        role=schema.AgentRole.IMPACT, campaign_id=campaign_id
+    )
+    child, task = await orchestrator.spawn_subagent(
+        parent=parent,
+        request=runtime.SubagentRequest(objective="helper"),
+    )
+    assert task.campaign_id == campaign_id
+    assert task.status == schema.TaskStatus.PENDING
+    assert task.payload["agent_id"] == child.id
+    assert task.payload["parent_agent_id"] == parent.id
+    assert task.payload["objective"] == "helper"
+    assert task.kind == schema.TaskKind.GENERIC
+    # idempotent: a second spawn_subagent with the same child would reuse
+    # the same task via the idempotency_key
+    async with orchestrator._conn() as conn:  # noqa: SLF001
+        from mavr.orchestrator import queue as q
+
+        fetched = await q.get(conn, task.id)
+        assert fetched is not None
+        assert fetched.id == task.id
 
 
 @pytest.mark.asyncio
