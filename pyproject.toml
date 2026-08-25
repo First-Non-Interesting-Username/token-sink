@@ -76,3 +76,6 @@ ignore = ["E501"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "load: load / scale tests; skip with '-m \"not load\"' for a fast loop",
+]

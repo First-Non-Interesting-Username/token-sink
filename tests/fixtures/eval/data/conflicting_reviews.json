@@ -1,0 +1,53 @@
+[
+  {
+    "id": "conflict-rate-limit-bypass",
+    "title": "Rate limit bypass via header rotation",
+    "finding_body": "The /api endpoint enforces a rate limit of 100 req/min per source IP. By rotating the X-Forwarded-For header, an attacker can exceed the limit without being blocked.",
+    "evidence_refs": [
+      "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    ],
+    "reviews": [
+      {
+        "reviewer": "reviewer-1",
+        "verdict": "accept",
+        "validity": "valid",
+        "reproduction_quality": "high",
+        "scope_safety": "safe",
+        "severity_consistency": "consistent",
+        "confidence": 0.85,
+        "rationale": "Reproduced the bypass in staging."
+      },
+      {
+        "reviewer": "reviewer-2",
+        "verdict": "accept",
+        "validity": "valid",
+        "reproduction_quality": "high",
+        "scope_safety": "safe",
+        "severity_consistency": "consistent",
+        "confidence": 0.9,
+        "rationale": "Confirmed; logged reproduction transcript."
+      },
+      {
+        "reviewer": "reviewer-3",
+        "verdict": "reject",
+        "validity": "invalid",
+        "reproduction_quality": "low",
+        "scope_safety": "safe",
+        "severity_consistency": "consistent",
+        "confidence": 0.4,
+        "rationale": "X-Forwarded-For is not honored by the upstream load balancer; the rate limit is per real IP, not per spoofed header."
+      },
+      {
+        "reviewer": "reviewer-4",
+        "verdict": "reject",
+        "validity": "invalid",
+        "reproduction_quality": "low",
+        "scope_safety": "unsafe",
+        "severity_consistency": "consistent",
+        "confidence": 0.3,
+        "rationale": "Cannot reproduce; marking unsafe."
+      }
+    ],
+    "expected_outcome": "request_changes"
+  }
+]

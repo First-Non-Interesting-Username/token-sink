@@ -1,0 +1,35 @@
+[
+  {
+    "id": "fp-version-string",
+    "title": "Version disclosure via Server header",
+    "description": "The Server header contains 'nginx/1.18.0'. This is informational only and not an exploitable finding.",
+    "severity": "low",
+    "confidence": "inconclusive",
+    "evidence_refs": [
+      "55555555-5555-4555-8555-555555555555"
+    ],
+    "expected_outcome": "reject_invalid"
+  },
+  {
+    "id": "fp-self-xss",
+    "title": "XSS in account settings (self only)",
+    "description": "An authenticated user can inject script into their own profile name. There is no other user who views the rendered profile, so there is no realistic impact.",
+    "severity": "low",
+    "confidence": "incorrect",
+    "evidence_refs": [
+      "66666666-6666-4666-8666-666666666666"
+    ],
+    "expected_outcome": "reject_invalid"
+  },
+  {
+    "id": "fp-cookie-without-httponly",
+    "title": "Session cookie missing HttpOnly flag",
+    "description": "A non-essential UX cookie does not have the HttpOnly flag set. The application does not use this cookie for authentication or session state.",
+    "severity": "low",
+    "confidence": "inconclusive",
+    "evidence_refs": [
+      "77777777-7777-4777-8777-777777777777"
+    ],
+    "expected_outcome": "reject_invalid"
+  }
+]

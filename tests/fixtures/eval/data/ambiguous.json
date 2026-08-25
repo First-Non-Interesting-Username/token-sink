@@ -1,0 +1,24 @@
+[
+  {
+    "id": "amb-open-redirect",
+    "title": "Open redirect on /login?next=",
+    "description": "/login?next=https://evil.com returns a 302 to evil.com after authentication. Whether this is a finding depends on the threat model: phishability is real, but exploit requires the victim to authenticate first.",
+    "severity": "low",
+    "confidence": "inconclusive",
+    "evidence_refs": [
+      "88888888-8888-4888-8888-888888888888"
+    ],
+    "expected_outcome": "request_changes"
+  },
+  {
+    "id": "amb-cors-wildcard",
+    "title": "CORS wildcard with credentials=false",
+    "description": "API responses carry 'Access-Control-Allow-Origin: *'. Credentials are not allowed, so the browser will not send cookies. Some scanners still flag this; the actual risk depends on whether sensitive data is exposed.",
+    "severity": "low",
+    "confidence": "inconclusive",
+    "evidence_refs": [
+      "99999999-9999-4999-8999-999999999999"
+    ],
+    "expected_outcome": "request_changes"
+  }
+]
