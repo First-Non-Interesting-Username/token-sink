@@ -325,5 +325,24 @@
       "$ref": "common.schema.json#/$defs/timestamp"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "version": {
+            "const": 1
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "state": {
+            "const": "initial_findings"
+          }
+        }
+      },
+      "description": "PLAN \u00a710.1: findings are created in initial_findings; version 1 can never be in a later lifecycle state."
+    }
+  ]
 }

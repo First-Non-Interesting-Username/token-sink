@@ -13,7 +13,8 @@
     "extractor",
     "content_hash",
     "artifact_ref",
-    "retrieved_at"
+    "retrieved_at",
+    "trust_label"
   ],
   "properties": {
     "schema_version": {
@@ -31,6 +32,13 @@
     "url": {
       "type": "string",
       "format": "uri"
+    },
+    "trust_label": {
+      "const": "untrusted",
+      "description": "PLAN \u00a79: all extracted content is untrusted input (prompt-injection defense). Schema-enforced so producers cannot omit the label."
+    },
+    "trust_label_verified_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
     },
     "extractor": {
       "enum": [
