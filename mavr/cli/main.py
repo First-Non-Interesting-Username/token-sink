@@ -5,6 +5,7 @@ Phase 1: skeleton only. Subcommands print a placeholder and exit.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -232,27 +233,167 @@ def campaign_export() -> None:
 
 
 @provider_app.command("list")
-def provider_list() -> None:
-    """List configured providers."""
-    _not_implemented("system provider list")
+def provider_list(
+    config: str | None = typer.Option(None, "--config", help="Path to user config overlay."),
+) -> None:
+    """List configured providers (native free, gateways, and custom endpoints)."""
+    from mavr.config.loader import _user_config_path
+    from mavr.observability.logging import configure_logging as _configure_logging
+    from mavr.providers.registry import ProviderRegistry
+
+    cfg = _resolve_config_or_exit(config)
+    _configure_logging(level=cfg.logging.level, json=cfg.logging.json_output)
+    overlay = _user_config_path() if config is None else config
+    console.print(f"[blue]config[/blue]: {overlay}")
+
+    registry = ProviderRegistry.default()
+    try:
+        for summary in registry.list():
+            free_tag = "[green]free[/green]" if summary.free else "[yellow]paid/unknown[/yellow]"
+            auth_color = {
+                "ok": "green",
+                "missing": "yellow",
+                "invalid": "red",
+            }.get(summary.auth_status, "white")
+            console.print(
+                f"  [bold]{summary.provider_id}[/bold] "
+                f"({summary.kind}, {free_tag}, auth=[{auth_color}]{summary.auth_status}[/{auth_color}]) — "
+                f"{summary.model_count} model(s) | {summary.display_name}"
+            )
+    finally:
+        asyncio_run(registry.aclose())
 
 
 @provider_app.command("test")
-def provider_test() -> None:
-    """Test a provider."""
-    _not_implemented("system provider test")
+def provider_test(
+    provider_id: str = typer.Argument(..., help="Provider id, e.g. gemini or huggingface."),
+    config: str | None = typer.Option(None, "--config", help="Path to user config overlay."),
+) -> None:
+    """Run a connectivity + auth probe against a single provider.
+
+    Never logs the secret. The exit code is 0 on success, 1 on failure.
+    """
+    from mavr.observability.logging import configure_logging as _configure_logging
+    from mavr.providers.registry import ProviderRegistry
+
+    cfg = _resolve_config_or_exit(config)
+    _configure_logging(level=cfg.logging.level, json=cfg.logging.json_output)
+
+    registry = ProviderRegistry.default()
+    try:
+        if not registry.has(provider_id):
+            console.print(f"[red]unknown provider:[/red] {provider_id}")
+            raise typer.Exit(code=2)
+        report = asyncio_run(registry.health(provider_id))
+        auth_color = {
+            "ok": "green",
+            "missing": "yellow",
+            "invalid": "red",
+        }.get(report.auth_status, "white")
+        status = "[green]OK[/green]" if report.ok else "[red]FAIL[/red]"
+        console.print(
+            f"{status} [bold]{provider_id}[/bold]: auth=[{auth_color}]{report.auth_status}[/{auth_color}] "
+            f"latency={report.latency_ms}ms detail={report.detail}"
+        )
+        if not report.ok:
+            raise typer.Exit(code=1)
+    finally:
+        asyncio_run(registry.aclose())
 
 
 @model_app.command("list")
-def model_list() -> None:
-    """List available models."""
-    _not_implemented("system model list")
+def model_list(
+    config: str | None = typer.Option(None, "--config", help="Path to user config overlay."),
+) -> None:
+    """List all known models with their free status and capabilities."""
+    from mavr.observability.logging import configure_logging as _configure_logging
+    from mavr.providers.registry import ProviderRegistry
+
+    cfg = _resolve_config_or_exit(config)
+    _configure_logging(level=cfg.logging.level, json=cfg.logging.json_output)
+
+    registry = ProviderRegistry.default()
+    try:
+        for adapter in registry.all():  # type: ignore[attr-defined]
+            for entry in adapter.models():
+                free_tag = (
+                    "[green]free[/green]"
+                    if entry.free and entry.free_status == "confirmed"
+                    else f"[yellow]{entry.free_status}[/yellow]"
+                )
+                console.print(
+                    f"  [bold]{entry.provider_id}[/bold]/[cyan]{entry.model_key}[/cyan] "
+                    f"({free_tag}, ctx={entry.context_limit}, stream={entry.streaming}) — "
+                    f"{entry.display_name}"
+                )
+    finally:
+        asyncio_run(registry.aclose())
 
 
 @model_app.command("benchmark")
-def model_benchmark() -> None:
-    """Run the internal model benchmark suite."""
-    _not_implemented("system model benchmark")
+def model_benchmark(
+    config: str | None = typer.Option(None, "--config", help="Path to user config overlay."),
+    provider: str | None = typer.Option(
+        None,
+        "--provider",
+        help="Comma-separated list of provider ids to benchmark. Defaults to all.",
+    ),
+    mock: bool = typer.Option(
+        True,
+        "--mock/--no-mock",
+        help="Use an in-process mock adapter instead of real providers (default: mock).",
+    ),
+) -> None:
+    """Run the offline benchmark suite and persist scores.
+
+    By default the benchmark runs against a mock adapter so the suite
+    is reproducible in CI. Pass --no-mock to run against real
+    providers; you must have valid secrets configured.
+    """
+    from mavr.providers.model_benchmark import BenchmarkRunner
+    from mavr.providers.model_catalog import ModelScoreStore
+    from mavr.providers.registry import ProviderRegistry
+    from mavr.storage.database import Database, apply_migrations, expand_db_path
+
+    cfg = _resolve_config_or_exit(config)
+    from mavr.observability.logging import configure_logging as _configure_logging
+
+    _configure_logging(level=cfg.logging.level, json=cfg.logging.json_output)
+
+    db = Database(expand_db_path(cfg.storage.db_path))
+    asyncio_run(apply_migrations(db, "up"))
+    scores = ModelScoreStore(db)
+
+    registry = ProviderRegistry.default()
+    try:
+        targets: list[tuple[str, str, Any]] = []
+        if mock:
+            from mavr.tests._fakes import MockAdapter
+
+            mock_adapter = MockAdapter()
+            for entry in mock_adapter.models():
+                targets.append((entry.provider_id, entry.model_key, mock_adapter.chat))
+        else:
+            if provider:
+                chosen = {p.strip() for p in provider.split(",") if p.strip()}
+            else:
+                chosen = {a.provider_id for a in registry.all()}  # type: ignore[attr-defined]
+            for adapter in registry.all():  # type: ignore[attr-defined]
+                if adapter.provider_id not in chosen:
+                    continue
+                for entry in adapter.models():
+                    targets.append((entry.provider_id, entry.model_key, adapter.chat))
+
+        runner = BenchmarkRunner(db, scores)
+        run_id = asyncio_run(runner.run(targets, actor_kind="human", actor_id="cli", notes="cli benchmark"))
+        console.print(f"[green]benchmark complete[/green] run_id={run_id}")
+        for s in asyncio_run(scores.all()):
+            console.print(
+                f"  [bold]{s.provider_id}[/bold]/[cyan]{s.model_key}[/cyan] "
+                f"category={s.category.value} score={s.score:.2f} samples={s.sample_count}"
+            )
+    finally:
+        asyncio_run(registry.aclose())
 
 
 @finding_app.command("list")
