@@ -28,9 +28,10 @@ def test_implements_interface(store):
 def test_migrations_versioned_and_idempotent(tmp_path):
     s = SQLiteStorage(tmp_path / "m.db", tmp_path / "a")
     assert s.schema_version == 0
-    assert s.migrate() == 1
-    assert s.schema_version == 1
-    assert s.migrate() == 1  # re-running applies nothing, no error
+    current = s.migrate()
+    assert current >= 1
+    assert s.schema_version == current
+    assert s.migrate() == current  # re-running applies nothing, no error
     s.close()
 
 
@@ -128,6 +129,6 @@ def test_export_all_roundtrip_shape(store):
     store.insert_record("campaign", "c1", {"name": "n"})
     store.put_artifact(b"blob")
     export = store.export_all()
-    assert export["schema_version"] == 1
+    assert export["schema_version"] >= 1
     assert export["tables"]["records"][0]["id"] == "c1"
     assert len(export["tables"]["artifacts"]) == 1

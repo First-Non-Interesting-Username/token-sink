@@ -26,49 +26,24 @@ from storage.base import (
     Storage,
 )
 
-# Migrations: list of (version, sql). Append-only — never edit an applied
-# migration; add a new entry instead. Version 1 = initial schema.
-MIGRATIONS: list[tuple[int, str]] = [
-    (
-        1,
-        """
-    CREATE TABLE records (
-        kind TEXT NOT NULL,
-        id TEXT NOT NULL,
-        version INTEGER NOT NULL DEFAULT 1,
-        state TEXT NOT NULL DEFAULT 'created',
-        data TEXT NOT NULL,               -- JSON payload
-        idempotency_key TEXT UNIQUE,      -- enables idempotent task execution
-        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-        PRIMARY KEY (kind, id)
-    );
-    CREATE TABLE transitions (
-        seq INTEGER PRIMARY KEY AUTOINCREMENT,  -- append-only history ordering
-        kind TEXT NOT NULL,
-        record_id TEXT NOT NULL,
-        from_state TEXT,
-        to_state TEXT NOT NULL,
-        reason TEXT NOT NULL DEFAULT '',
-        at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-    );
-    CREATE TABLE artifacts (
-        sha256 TEXT PRIMARY KEY,
-        size INTEGER NOT NULL,
-        suggested_name TEXT NOT NULL,
-        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-    );
-    CREATE INDEX idx_records_kind ON records(kind);
-    CREATE INDEX idx_transitions_record ON transitions(kind, record_id);
-    """,
-    ),
-]
+# Migrations moved to file-based forward-only runner (issue #130): see
+# storage/migrations.py and migrations/*.sql. Kept here only as a re-export
+# for backwards compatibility with older imports.
+from storage.migrations import Migration, MigrationError, MigrationRunner  # noqa: E402,F401
+
+# Repo-shipped migrations live at the project root (PLAN §4 layout).
+_DEFAULT_MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 
 _SAFE_ID = re.compile(r"^[A-Za-z0-9._:@-]{1,256}$")
 
 
 class SQLiteStorage(Storage):
-    def __init__(self, db_path: str | Path, artifact_dir: str | Path):
+    def __init__(
+        self,
+        db_path: str | Path,
+        artifact_dir: str | Path,
+        migrations_dir: str | Path | None = None,
+    ):
         self.db_path = Path(db_path)
         self.artifact_dir = Path(artifact_dir)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -79,6 +54,11 @@ class SQLiteStorage(Storage):
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
         self.conn.row_factory = sqlite3.Row
+        # Migrations dir defaults to the repo's migrations/ package sibling;
+        # overridable for tests that exercise synthetic migration sequences.
+        self.migrations_dir = Path(migrations_dir) if migrations_dir else _DEFAULT_MIGRATIONS_DIR
+        self._runner: MigrationRunner | None = None
+        self._runner_migrations_dir = ""
 
     # --- lifecycle / migrations ---
 
@@ -92,19 +72,22 @@ class SQLiteStorage(Storage):
         return row["v"] or 0
 
     def migrate(self) -> int:
+        """Apply pending migrations via the shared forward-only runner.
+
+        The runner enforces the safety properties from issue #130 / PLAN §12:
+        content-hash verification of applied history, downgrade protection,
+        one transaction per migration (crash-safe), and gap detection.
+        """
         self._ensure_migration_table()
-        current = self.schema_version
-        for version, sql in MIGRATIONS:
-            if version <= current:
-                continue
-            # Each migration is one transaction so a crash mid-migration rolls
-            # back cleanly and can be retried on next startup.
-            with self.conn:
-                self.conn.executescript(sql)
-                self.conn.execute("INSERT INTO schema_migrations (version) VALUES (?)", (version,))
-        return self.schema_version
+        if self._runner is None or self._runner_migrations_dir != str(self.migrations_dir):
+            self._runner = MigrationRunner(self.conn, self.migrations_dir)
+            self._runner_migrations_dir = str(self.migrations_dir)
+        return self._runner.migrate()
 
     def _ensure_migration_table(self) -> None:
+        # Kept as a minimal standalone create so schema_version can be read
+        # before any MigrationRunner exists (e.g. doctor checks). The runner
+        # creates the richer history table (name/sha256 columns) itself.
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS schema_migrations ("
             " version INTEGER PRIMARY KEY,"
