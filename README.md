@@ -30,7 +30,7 @@ see PLAN.md §2).
 | `storage/` | Transactional DB + artifact store, migrations, crash recovery |
 | `observability/` | Structured events, metrics, audit log |
 | `schemas/` | Versioned machine-readable record schemas |
-| `config_loader.py` | YAML/TOML config loading + collect-all-errors validation (§16) |
+| `config/` | YAML/TOML config loading + collect-all-errors validation (§16)
 | `config/example.yaml` | Documented example configuration |
 | `tests/` | Test suite |
 
@@ -39,7 +39,7 @@ see PLAN.md §2).
 Copy `config/example.yaml`, adjust paths, and validate:
 
 ```bash
-python -c "from config_loader import load; load('config/example.yaml'); print('OK')"
+python -c "import pathlib; from config import load; print(load(pathlib.Path('config/example.yaml')).server_port)"
 ```
 
 Validation collects **all** problems and reports them together before anything

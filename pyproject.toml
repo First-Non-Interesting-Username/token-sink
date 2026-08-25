@@ -8,7 +8,7 @@ version = "0.0.1"
 description = "Multi-agent security vulnerability research orchestrator (see PLAN.md)"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { file = "LICENSE" }
+license = "MIT"
 # Dependencies kept minimal per issue #5: PyYAML for config, pytest only for dev.
 dependencies = [
     "PyYAML>=6.0",
@@ -27,6 +27,7 @@ packages = [
     "cli", "api", "ui", "orchestrator", "routers",
     "agents", "providers", "search", "policy",
     "findings", "storage", "observability",
+    "config",
 ]
 
 [tool.pytest.ini_options]

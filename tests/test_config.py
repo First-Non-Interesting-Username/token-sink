@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from config_loader import (
+from config import (
     Config,
     ConfigError,
     ConfigValidationError,
@@ -69,12 +69,13 @@ class TestCollectAllErrors:
         keys = {e.key for e in errors}
         assert {"server.port", "routers.count", "search.extraction_backend", "logging.level"} <= keys
 
-    def test_validation_error_carries_all(self):
+    def test_validation_error_carries_all(self, tmp_path):
         bad = dict(VALID)
         bad["server"] = {"port": -1}
         bad["routers"] = {"count": 0}
+        # exercise the real entry point, not a hand-constructed exception
         with pytest.raises(ConfigValidationError) as exc:
-            raise ConfigValidationError(validate(bad))
+            load(write_yaml(tmp_path, bad))
         assert len(exc.value.errors) >= 2
         # every error message names its offending key (§16 requirement)
         assert all(": " in str(e) for e in exc.value.errors)
@@ -125,6 +126,17 @@ class TestIndividualRules:
     def test_quorum_exceeding_router_count_rejected(self):
         errors = validate({"routers": {"count": 1}, "review": {"quorum": 3}})
         assert any(e.key == "review.quorum" for e in errors)
+
+    def test_quorum_checked_against_default_router_count(self):
+        # routers section absent -> effective count is the default (2)
+        errors = validate({"review": {"quorum": 50}})
+        assert any(e.key == "review.quorum" for e in errors)
+
+    def test_scalar_section_reported_not_ignored(self):
+        # `server: 8080` must be a reported structural error, not silently
+        # treated as "no server config".
+        errors = validate({"server": 8080})
+        assert any(e.key == "server" and "mapping" in e.message for e in errors)
 
     def test_retention_null_allowed_but_zero_not(self):
         assert not any(e.key == "retention.days" for e in validate({"retention": {"days": None}}))

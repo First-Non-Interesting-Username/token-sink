@@ -12,7 +12,6 @@ Design notes:
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -144,22 +143,29 @@ def validate(data: dict[str, Any]) -> list[ConfigError]:
             errors.append(ConfigError(section, f"unknown section (expected one of: {', '.join(sorted(_KNOWN_SECTIONS))})"))
 
     def get(dotted: str) -> tuple[Any, bool]:
+        """Resolve a dotted key against nested mappings.
+
+        Returns (value, True) when present, (None, False) when absent. If an
+        intermediate node exists but is not a mapping, records a structural
+        error instead of silently pretending the key is absent — §16 says
+        report ALL problems, and `server: oops` is a problem.
+        """
         node: Any = data
-        for part in dotted.split("."):
-            # TOML nested tables arrive as dicts; YAML uses nested mappings.
-            # Allow both "a.b" keys and {a: {b: ...}} shapes.
-            if isinstance(node, dict):
-                if part in node:
-                    node = node[part]
-                    continue
-                flat = dotted.replace(".", ".")
-                # some files use flat dotted keys inside one section
-                section, _, leaf = dotted.rpartition(".")
-                if section in node and isinstance(node[section], dict) and leaf in node[section]:
-                    return node[section][leaf], True
+        parts = dotted.split(".")
+        for part in parts:
+            if not isinstance(node, dict):
+                # intermediate node was a scalar; already reported below
                 return None, False
-            return None, False
+            if part not in node:
+                return None, False
+            node = node[part]
         return node, True
+
+    # Structural check: any section we know about must be a mapping, so a
+    # typo like `server: 8080` is reported rather than ignored.
+    for section in _KNOWN_SECTIONS & data.keys():
+        if not isinstance(data[section], dict):
+            errors.append(ConfigError(section, "must be a mapping"))
 
     # server
     host, ok = get("server.host")
@@ -221,11 +227,15 @@ def validate(data: dict[str, Any]) -> list[ConfigError]:
     if ok and days is not None and (not isinstance(days, int) or isinstance(days, bool) or days < 1):
         errors.append(ConfigError("retention.days", "must be a positive integer or null"))
 
-    # review quorum sanity: quorum should not exceed router count when both set
+    # review quorum sanity: compare against the EFFECTIVE router count —
+    # the explicit value if set, otherwise the Config default (2). Checking
+    # only when both keys are present would let `review.quorum: 50` pass
+    # while from_dict later defaults routers.count to 2.
     quorum, q_ok = get("review.quorum")
     rcount, r_ok = get("routers.count")
-    if q_ok and r_ok and isinstance(quorum, int) and isinstance(rcount, int) and quorum > rcount:
-        errors.append(ConfigError("review.quorum", f"quorum ({quorum}) exceeds routers.count ({rcount}); reviews could never complete"))
+    effective_rcount = rcount if r_ok else Config().router_count
+    if q_ok and isinstance(quorum, int) and isinstance(effective_rcount, int) and quorum > effective_rcount:
+        errors.append(ConfigError("review.quorum", f"quorum ({quorum}) exceeds router count ({effective_rcount}); reviews could never complete"))
 
     return errors
 

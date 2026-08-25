@@ -4,7 +4,7 @@ init/doctor/serve surface is PLAN.md §17 and lands with its own issue."""
 import argparse
 import sys
 
-from config_loader import ConfigValidationError, load
+from config import load, ConfigValidationError
 
 
 def main(argv=None) -> int:
@@ -26,7 +26,9 @@ def main(argv=None) -> int:
             return 1
         print("configuration OK")
         return 0
-    return 2
+    # Unreachable while subparsers are required=True; keeps the return-type
+    # contract honest if the parser is ever relaxed.
+    raise AssertionError("unreachable: argparse enforces a subcommand")
 
 
 if __name__ == "__main__":
