@@ -337,7 +337,7 @@ def validate_dict(raw: Any) -> tuple[Config, list[str]]:
     if isinstance(a, dict):
         b = a.get("budget_usd")
         if b is not None:
-            if isinstance(b, (int, float)) and not isinstance(b, bool) and b > 0:
+            if isinstance(b, int | float) and not isinstance(b, bool) and b > 0:
                 cfg.agents.budget_usd = float(b)
             else:
                 _err(errors, "agents.budget_usd", "must be a positive number")
