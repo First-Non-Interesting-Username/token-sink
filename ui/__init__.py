@@ -1,1 +1,1 @@
-"""Locally hosted web UI: dashboard, live agent activity, finding workspace, approvals (PLAN §13)."""
+"""Locally hosted web UI: dashboard, agent activity, finding workspace, approvals (PLAN §13)."""

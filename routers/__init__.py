@@ -1,1 +1,1 @@
-"""Router pool: parallel independent routers with candidate merge policies and safeguards (PLAN §7)."""
+"""Router pool: independent parallel routers with merge policies and safeguards (PLAN §7)."""
