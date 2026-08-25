@@ -28,6 +28,8 @@ acceptance criteria) and its phased roadmap.
   scope; what the policy engine blocks and why.
 - [docs/contributor-guide.md](docs/contributor-guide.md) — repo layout,
   conventions, adding providers/tests/docs.
+- [docs/idempotency.md](docs/idempotency.md) — idempotent task execution:
+  journal-first side effects and exactly-once semantics (issue #126).
 
 ## For AI agents
 
