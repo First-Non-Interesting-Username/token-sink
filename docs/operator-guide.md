@@ -23,7 +23,10 @@ system doctor
 ```
 
 `doctor` verifies prerequisites, configuration validity, credential access,
-and reports problems before any workers start.
+and reports problems before any workers start. Full check list, exit codes
+(0 pass / 2 warn / 1 fail), and the `--json` flag are documented in
+[docs/system-doctor.md](docs/system-doctor.md). Run it as
+`python -m cli doctor [--config PATH] [--skip-network]`.
 
 ## Configuration
 
