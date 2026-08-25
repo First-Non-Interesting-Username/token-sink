@@ -8,6 +8,7 @@ Layout follows [PLAN.md §19](../PLAN.md):
 | `tests/integration/` | Cross-subsystem tests against mocks (marked `integration`) |
 | `tests/safety/` | Security guardrail tests (marked `safety`; never skipped in CI) |
 | `evaluation/fixtures/` | Evaluation fixtures (§19.4) |
+| `fixtures/target/` | Local mock-target server for safe PoC work (#95) — see [fixtures/target/README.md](../fixtures/target/README.md) |
 
 Load (§19.5) and acceptance (§19.6) suites land later; add them as new top-level
 test dirs when they do.
