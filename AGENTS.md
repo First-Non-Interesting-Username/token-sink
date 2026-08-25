@@ -9,7 +9,11 @@ processes live in `docs/`, not here.**
   (product behavior, architecture, safety controls, acceptance criteria).
   Read it before doing anything; it is the source of truth for what we are
   building.
-- README.md — repo overview.
+- [README.md](README.md) — repo overview (links the full docs set).
+- [docs/architecture.md](docs/architecture.md) — architecture overview.
+- [docs/operator-guide.md](docs/operator-guide.md) — operator manual.
+- [docs/safety-and-scope.md](docs/safety-and-scope.md) — scope authoring + policy enforcement reference.
+- [docs/contributor-guide.md](docs/contributor-guide.md) — contributor/developer guide.
 - [docs/testing.md](docs/testing.md) — how to run the test suite and what CI enforces.
 
 ## Working rules

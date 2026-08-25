@@ -17,6 +17,16 @@ Planning stage. There is no implementation yet — see [PLAN.md](PLAN.md) for th
 full implementation plan (product behavior, architecture, safety controls,
 acceptance criteria) and its phased roadmap.
 
+## Documentation
+
+- [docs/architecture.md](docs/architecture.md) — architecture overview.
+- [docs/operator-guide.md](docs/operator-guide.md) — install, configure, run
+  campaigns safely, approvals & kill switch.
+- [docs/safety-and-scope.md](docs/safety-and-scope.md) — writing campaign
+  scope; what the policy engine blocks and why.
+- [docs/contributor-guide.md](docs/contributor-guide.md) — repo layout,
+  conventions, adding providers/tests/docs.
+
 ## For AI agents
 
 Working rules, conventions, and PR process live in [AGENTS.md](AGENTS.md).
