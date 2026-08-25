@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/scope_policy.schema.json",
+  "title": "Scope policy (PLAN §5) — evaluated against every tool call before execution",
+  "$ref": "common.schema.json#/$defs/versioned_record",
+  "properties": {
+    "campaign_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "in_scope_targets": { "type": "array", "items": { "type": "string" } },
+    "out_of_scope_targets": { "type": "array", "items": { "type": "string" } },
+    "allowed_methods": { "type": "array", "items": { "type": "string" } },
+    "prohibited_actions": { "type": "array", "items": { "type": "string" } },
+    "ssrf_protections": {
+      "type": "object",
+      "properties": {
+        "block_private_networks": { "type": "boolean", "default": true },
+        "block_link_local": { "type": "boolean", "default": true },
+        "block_metadata_service": { "type": "boolean", "default": true },
+        "explicitly_authorized_addresses": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
+  "required": ["campaign_uuid", "in_scope_targets"]
+}

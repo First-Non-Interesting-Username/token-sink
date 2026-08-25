@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/extracted_source.schema.json",
+  "title": "Extracted source — untrusted input with provenance (PLAN §9)",
+  "$ref": "common.schema.json#/$defs/versioned_record",
+  "properties": {
+    "campaign_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "source_url": { "type": "string", "format": "uri" },
+    "extraction_method": { "type": "string", "enum": ["curl_direct", "jina_ai_fallback", "other"] },
+    "raw_content_hash": { "type": "string", "description": "Hash of the raw extracted content for provenance." },
+    "untrusted_input_label": {
+      "type": "string",
+      "const": "untrusted_extracted_content",
+      "description": "Every extracted source is labeled untrusted (prompt-injection defense, PLAN §9)."
+    },
+    "epistemic_label": { "$ref": "common.schema.json#/$defs/epistemic_label" },
+    "redaction": { "$ref": "common.schema.json#/$defs/redaction_status" }
+  },
+  "required": ["campaign_uuid", "source_url", "raw_content_hash", "untrusted_input_label"]
+}

@@ -1,0 +1,16 @@
+[project]
+name = "token-sink"
+version = "0.0.1"
+description = "Multi-agent security vulnerability research system (see PLAN.md)"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+# Schemas-only install: validation + tests for schemas/ (issue #9).
+schemas = ["jsonschema>=4.21"]
+
+[dependency-groups]
+dev = ["pytest>=8", "jsonschema>=4.21", "referencing>=0.34"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

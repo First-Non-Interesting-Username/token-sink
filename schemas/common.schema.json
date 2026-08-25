@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/common.schema.json",
+  "title": "Shared definitions for token-sink record schemas",
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Globally unique identifier (RFC 9562 UUID)."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 UTC timestamp."
+    },
+    "versioned_record": {
+      "type": "object",
+      "description": "Common envelope for versioned records. Records are append-only: each change creates a new version referencing the previous one.",
+      "required": ["uuid", "schema_version", "created_at", "updated_at", "version"],
+      "properties": {
+        "uuid": { "$ref": "#/$defs/uuid" },
+        "schema_version": { "type": "integer", "minimum": 1, "description": "Version of the schema definition this record conforms to." },
+        "created_at": { "$ref": "#/$defs/timestamp" },
+        "updated_at": { "$ref": "#/$defs/timestamp" },
+        "version": { "type": "integer", "minimum": 1, "description": "Monotonically increasing per-record revision." },
+        "previous_version_id": { "$ref": "#/$defs/uuid" }
+      }
+    },
+    "lease": {
+      "type": "object",
+      "description": "Ownership lease held by an agent on a record (e.g. a reviewer claiming a finding).",
+      "required": ["holder_agent_uuid", "expires_at"],
+      "properties": {
+        "holder_agent_uuid": { "$ref": "#/$defs/uuid" },
+        "acquired_at": { "$ref": "#/$defs/timestamp" },
+        "expires_at": { "$ref": "#/$defs/timestamp" },
+        "renewal_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "description": "Resource budget limits (PLAN §6).",
+      "properties": {
+        "max_tokens": { "type": ["integer", "null"], "minimum": 0 },
+        "max_requests": { "type": ["integer", "null"], "minimum": 0 },
+        "max_seconds": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "max_tool_calls": { "type": ["integer", "null"], "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "model_provider_metadata": {
+      "type": "object",
+      "description": "Which provider/model produced this record, for provenance.",
+      "properties": {
+        "provider_uuid": { "$ref": "#/$defs/uuid" },
+        "provider_name": { "type": "string" },
+        "model_identifier": { "type": "string" },
+        "free_tier": { "type": ["boolean", "null"] }
+      }
+    },
+    "epistemic_label": {
+      "type": "string",
+      "enum": ["source_fact", "agent_inference", "unverified_claim", "requires_active_confirmation"],
+      "description": "Epistemic labeling required by PLAN §9."
+    },
+    "redaction_status": {
+      "type": "object",
+      "description": "Redaction tracking per PLAN §15; applied to every persisted record.",
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string", "enum": ["pending_review", "redacted", "no_sensitive_content_found", "failed_redaction_quarantined"] },
+        "redacted_by": { "$ref": "#/$defs/uuid" },
+        "redacted_at": { "$ref": "#/$defs/timestamp" },
+        "notes": { "type": "string" }
+      }
+    },
+    "audit_ref": {
+      "type": "object",
+      "description": "Reference to an audit event recording a state change (tamper-evident trail, PLAN §14).",
+      "required": ["audit_event_uuid"],
+      "properties": {
+        "audit_event_uuid": { "$ref": "#/$defs/uuid" },
+        "recorded_at": { "$ref": "#/$defs/timestamp" }
+      }
+    }
+  }
+}

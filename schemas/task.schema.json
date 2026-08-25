@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/task.schema.json",
+  "title": "Task routed to agents (PLAN §6, §7)",
+  "$ref": "common.schema.json#/$defs/versioned_record",
+  "properties": {
+    "campaign_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "assigned_agent_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "routed", "running", "completed", "failed", "cancelled", "dead_lettered"]
+    },
+    "description": { "type": "string" },
+    "required_capabilities": { "type": "array", "items": { "type": "string" } },
+    "free_only": { "type": "boolean", "default": false, "description": "When true, routing must never select a paid model (PLAN §7.3)." },
+    "budget": { "$ref": "common.schema.json#/$defs/budget" }
+  },
+  "required": ["campaign_uuid", "status", "description"]
+}

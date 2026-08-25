@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/campaign.schema.json",
+  "title": "Campaign (PLAN §5)",
+  "$ref": "common.schema.json#/$defs/versioned_record",
+  "properties": {
+    "name": { "type": "string", "minLength": 1 },
+    "authorization_reference": { "type": "string", "description": "Reference to the authorization granting this campaign (e.g. program engagement)." },
+    "program_name": { "type": "string" },
+    "in_scope": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "In-scope domains, URLs, repos, packages, APIs, or applications."
+    },
+    "out_of_scope": { "type": "array", "items": { "type": "string" } },
+    "allowed_http_methods": { "type": "array", "items": { "type": "string" } },
+    "allowed_test_classes": { "type": "array", "items": { "type": "string" } },
+    "prohibited_actions": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["denial_of_service", "destructive_mutation", "spam", "credential_attacks", "data_exfiltration"] }
+    },
+    "rate_limits": {
+      "type": "object",
+      "properties": {
+        "max_requests_per_target_per_second": { "type": "integer", "minimum": 1 },
+        "max_concurrency_per_target": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "max_total_duration_seconds": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "token_budget": { "type": ["integer", "null"], "minimum": 0 },
+        "tool_budget": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "active_testing_enabled": { "type": "boolean" },
+    "human_approval_requirements": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["active_testing", "poc_live_execution", "submission", "finding_deletion", "scope_change"] }
+    },
+    "data_handling": {
+      "type": "object",
+      "properties": {
+        "retention_days": { "type": ["integer", "null"], "minimum": 1 },
+        "notes": { "type": "string" }
+      }
+    }
+  },
+  "required": ["name", "authorization_reference", "in_scope", "out_of_scope", "prohibited_actions", "active_testing_enabled"]
+}

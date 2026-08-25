@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/evidence_item.schema.json",
+  "title": "Evidence item (PLAN §10.1, §11)",
+  "$ref": "common.schema.json#/$defs/versioned_record",
+  "properties": {
+    "campaign_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "finding_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "collected_by_agent_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "artifact_uri": { "type": "string", "description": "Location of the evidence artifact in the artifact store (never identity by filename alone, PLAN §12)." },
+    "content_hash": { "type": "string" },
+    "epistemic_label": { "$ref": "common.schema.json#/$defs/epistemic_label" },
+    "description": { "type": "string" },
+    "redaction": { "$ref": "common.schema.json#/$defs/redaction_status" }
+  },
+  "required": ["campaign_uuid", "content_hash", "epistemic_label"]
+}

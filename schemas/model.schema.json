@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/model.schema.json",
+  "title": "Model catalog entry + dynamic scores (PLAN §8.2–8.3)",
+  "$ref": "common.schema.json#/$defs/versioned_record",
+  "properties": {
+    "provider_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "identifier": { "type": "string" },
+    "free_status": {
+      "type": "string",
+      "enum": ["free", "paid", "unknown"],
+      "description": "Unknown models are excluded from free-only routing until confirmed (PLAN §8.2)."
+    },
+    "capabilities": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["coding", "search", "reasoning", "extraction", "planning", "report_writing", "review", "classification"] }
+    },
+    "context_window_tokens": { "type": ["integer", "null"], "minimum": 1 },
+    "max_output_tokens": { "type": ["integer", "null"], "minimum": 1 },
+    "scores": {
+      "type": "array",
+      "description": "Dynamic per-category scores with confidence; raw observations stored separately.",
+      "items": {
+        "type": "object",
+        "required": ["category", "score", "sample_count", "confidence"],
+        "properties": {
+          "category": { "type": "string" },
+          "score": { "type": "number", "minimum": 0, "maximum": 1 },
+          "sample_count": { "type": "integer", "minimum": 0 },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    }
+  },
+  "required": ["provider_uuid", "identifier", "free_status"]
+}

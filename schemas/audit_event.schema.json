@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/audit_event.schema.json",
+  "title": "Audit event — append-only, tamper-evident (PLAN §14, §15)",
+  "$ref": "common.schema.json#/$defs/versioned_record",
+  "properties": {
+    "campaign_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "actor_agent_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "event_kind": {
+      "type": "string",
+      "enum": ["approval", "blocked_action", "state_change", "submission", "finding_deletion", "scope_change"]
+    },
+    "subject_record_type": { "type": "string" },
+    "subject_record_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "details": { "type": "string" },
+    "prev_event_hash": { "type": ["string", "null"], "description": "Hash of the previous audit event, forming a hash chain for tamper evidence." },
+    "event_hash": { "type": "string", "description": "Hash of this event including prev_event_hash." }
+  },
+  "required": ["event_kind", "subject_record_type", "subject_record_uuid", "event_hash"]
+}

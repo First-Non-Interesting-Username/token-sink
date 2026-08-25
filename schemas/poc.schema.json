@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/poc.schema.json",
+  "title": "Proof of concept (PLAN §10.4)",
+  "$ref": "common.schema.json#/$defs/versioned_record",
+  "properties": {
+    "finding_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "created_by_agent_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "target_kind": {
+      "type": "string",
+      "enum": ["local_fixture", "approved_target"],
+      "description": "Prefer a local mock or fixture; live targets require approval per policy."
+    },
+    "human_approval": {
+      "type": "object",
+      "description": "Required before executing against a live target when configured by policy.",
+      "properties": {
+        "required": { "type": "boolean" },
+        "granted_by": { "type": ["string", "null"] },
+        "granted_at": { "$ref": "common.schema.json#/$defs/timestamp" }
+      }
+    },
+    "setup": { "type": "string" },
+    "commands": { "type": "array", "items": { "type": "string" } },
+    "expected_output": { "type": "string" },
+    "cleanup_steps": { "type": "array", "items": { "type": "string" } },
+    "safety_notes": { "type": "string", "minLength": 1 },
+    "redaction": { "$ref": "common.schema.json#/$defs/redaction_status" }
+  },
+  "required": ["finding_uuid", "created_by_agent_uuid", "target_kind", "safety_notes"]
+}

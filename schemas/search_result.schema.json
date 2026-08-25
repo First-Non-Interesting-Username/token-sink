@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/search_result.schema.json",
+  "title": "Search result (PLAN §9)",
+  "$ref": "common.schema.json#/$defs/versioned_record",
+  "properties": {
+    "campaign_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "query": { "type": "string" },
+    "search_engine": { "type": "string", "description": "e.g. ddgs" },
+    "result_urls": { "type": "array", "items": { "type": "string", "format": "uri" } },
+    "snippets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["url", "snippet", "ranking"],
+        "properties": {
+          "url": { "type": "string", "format": "uri" },
+          "snippet": { "type": "string" },
+          "ranking": { "type": "integer", "minimum": 1 },
+          "epistemic_label": { "$ref": "common.schema.json#/$defs/epistemic_label" }
+        }
+      }
+    },
+    "scope_filter_result": {
+      "type": "object",
+      "description": "Outcome of applying campaign scope filters to discovered URLs before follow-up (PLAN §9).",
+      "required": ["passed"],
+      "properties": {
+        "passed": { "type": "boolean" },
+        "blocked_urls": { "type": "array", "items": { "type": "string", "format": "uri" } }
+      }
+    }
+  },
+  "required": ["campaign_uuid", "query"]
+}

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/final_report.schema.json",
+  "title": "Final report (PLAN §10.6) — written only after final review passes; submission is a separate human-approved action",
+  "$ref": "common.schema.json#/$defs/versioned_record",
+  "properties": {
+    "finding_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "polished_by_agent_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "final_review_agent_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "final_review_passed_at": { "$ref": "common.schema.json#/$defs/timestamp" },
+    "markdown_body": { "type": "string", "description": "Human-readable Markdown representation (PLAN §11)." },
+    "altered_claims": {
+      "type": "array",
+      "description": "Any claim altered during polishing must link to supporting evidence (PLAN §10.6).",
+      "items": {
+        "type": "object",
+        "required": ["claim", "evidence_uuid"],
+        "properties": {
+          "claim": { "type": "string" },
+          "evidence_uuid": { "$ref": "common.schema.json#/$defs/uuid" }
+        }
+      }
+    },
+    "submission_status": {
+      "type": "string",
+      "enum": ["not_submitted", "submitted"],
+      "default": "not_submitted"
+    },
+    "submission_approval": {
+      "type": "object",
+      "properties": {
+        "approved_by_human": { "type": "boolean" },
+        "approved_by": { "type": ["string", "null"] },
+        "approved_at": { "$ref": "common.schema.json#/$defs/timestamp" }
+      }
+    }
+  },
+  "required": ["finding_uuid", "polished_by_agent_uuid"]
+}

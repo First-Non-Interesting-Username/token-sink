@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/agent.schema.json",
+  "title": "Agent / subagent identity + runtime record (PLAN §6)",
+  "$ref": "common.schema.json#/$defs/versioned_record",
+  "properties": {
+    "parent_agent_uuid": { "$ref": "common.schema.json#/$defs/uuid", "description": "Null/absent for top-level agents." },
+    "campaign_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "role": { "type": "string" },
+    "task_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "status": {
+      "type": "string",
+      "enum": ["created", "queued", "assigned", "running", "waiting", "completed", "failed", "cancelled", "blocked"]
+    },
+    "model_provider": { "$ref": "common.schema.json#/$defs/model_provider_metadata" },
+    "budget": { "$ref": "common.schema.json#/$defs/budget" },
+    "heartbeat_at": { "$ref": "common.schema.json#/$defs/timestamp" }
+  },
+  "required": ["campaign_uuid", "role", "status"]
+}

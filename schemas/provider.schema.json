@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/provider.schema.json",
+  "title": "Provider configuration record (PLAN §8.1–8.2)",
+  "$ref": "common.schema.json#/$defs/versioned_record",
+  "properties": {
+    "name": { "type": "string" },
+    "provider_class": {
+      "type": "string",
+      "enum": ["native_free", "partly_free_gateway", "custom_user_endpoint"]
+    },
+    "endpoint_url": { "type": "string" },
+    "auth_status": {
+      "type": "string",
+      "enum": ["unauthenticated", "authenticated"],
+      "description": "Auth status only — never store credential values here."
+    },
+    "models": {
+      "type": "array",
+      "items": { "type": "object", "properties": { "identifier": { "type": "string" } }, "required": ["identifier"] }
+    },
+    "rate_limits": {
+      "type": "object",
+      "properties": {
+        "requests_per_minute": { "type": ["integer", "null"], "minimum": 1 },
+        "tokens_per_minute": { "type": ["integer", "null"], "minimum": 1 }
+      }
+    },
+    "health": {
+      "type": "string",
+      "enum": ["healthy", "degraded", "failing", "unknown"]
+    },
+    "trust_level": { "type": "string", "enum": ["approved_for_sensitive_data", "approved_non_sensitive_only", "unapproved"] }
+  },
+  "required": ["name", "provider_class", "auth_status", "trust_level"]
+}

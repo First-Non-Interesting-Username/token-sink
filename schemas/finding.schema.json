@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/finding.schema.json",
+  "title": "Finding version (PLAN §10, §11) — every finding version includes the fields below",
+  "$ref": "common.schema.json#/$defs/versioned_record",
+  "properties": {
+    "campaign_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "agent_uuid": { "$ref": "common.schema.json#/$defs/uuid", "description": "Agent that produced this version." },
+    "parent_finding_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "task_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "state": {
+      "type": "string",
+      "enum": ["initial_findings", "review_cycle_1", "validated_or_disputed", "impact_analysis", "poc_draft", "poc_review", "polished_report", "final_review", "vulnerabilities", "quarantined"],
+      "description": "Findings start in initial_findings, never directly in vulnerabilities (PLAN §10)."
+    },
+    "state_transition_reason": { "type": "string", "minLength": 1 },
+    "lease": { "$ref": "common.schema.json#/$defs/lease" },
+    "title": { "type": "string" },
+    "category": { "type": "string" },
+    "affected_asset": { "type": "string" },
+    "location": { "type": "string" },
+    "observation": { "type": "string" },
+    "hypothesis": { "type": "string" },
+    "reproduction_outline": { "type": "string" },
+    "suspected_impact": { "type": "string" },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "uncertainty_notes": { "type": "string" },
+    "evidence_refs": {
+      "type": "array",
+      "items": { "type": "object", "required": ["evidence_uuid"], "properties": { "evidence_uuid": { "$ref": "common.schema.json#/$defs/uuid" } } }
+    },
+    "review_votes": {
+      "type": "array",
+      "description": "All votes attached with dissent preserved; nothing is silently removed.",
+      "items": {
+        "type": "object",
+        "required": ["reviewer_agent_uuid", "conclusion"],
+        "properties": {
+          "reviewer_agent_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+          "conclusion": { "type": "string", "enum": ["confirmed", "likely", "inconclusive", "incorrect"] },
+          "dissent": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "model_provider_metadata": { "$ref": "common.schema.json#/$defs/model_provider_metadata" },
+    "content_hash": { "type": "string", "description": "Hash of this finding version's content." },
+    "redaction": { "$ref": "common.schema.json#/$defs/redaction_status" }
+  },
+  "required": [
+    "campaign_uuid",
+    "agent_uuid",
+    "state",
+    "state_transition_reason",
+    "content_hash"
+  ]
+}

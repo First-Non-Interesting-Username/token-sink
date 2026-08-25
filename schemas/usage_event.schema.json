@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/usage_event.schema.json",
+  "title": "Usage event — one model call (PLAN §13.5, §14)",
+  "$ref": "common.schema.json#/$defs/versioned_record",
+  "properties": {
+    "campaign_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "agent_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "task_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "provider_name": { "type": "string" },
+    "model_identifier": { "type": "string" },
+    "free_tier_call": { "type": "boolean", "description": "Free-tier usage must stay separated from paid everywhere it is displayed or exported." },
+    "input_tokens": { "type": "integer", "minimum": 0 },
+    "output_tokens": { "type": "integer", "minimum": 0 },
+    "cache_tokens": { "type": ["integer", "null"], "minimum": 0 },
+    "request_count": { "type": "integer", "minimum": 1, "default": 1 },
+    "latency_ms": { "type": ["integer", "null"], "minimum": 0 },
+    "estimated_cost_usd": { "type": ["number", "null"], "minimum": 0 }
+  },
+  "required": ["campaign_uuid", "agent_uuid", "provider_name", "model_identifier", "free_tier_call"]
+}

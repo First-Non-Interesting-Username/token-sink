@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/router_decision.schema.json",
+  "title": "Router decision — reproducible from recorded inputs + catalogs (PLAN §7)",
+  "$ref": "common.schema.json#/$defs/versioned_record",
+  "properties": {
+    "task_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "router_worker_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "merge_policy": {
+      "type": ["string", "null"],
+      "enum": [null, "consensus", "fastest_eligible", "best_score_within_budget", "diversity"],
+      "description": "Set by the coordinator when this record merges multiple router candidates."
+    },
+    "candidate_plan": {
+      "type": "object",
+      "required": ["selected_model_uuid", "rationale", "confidence"],
+      "properties": {
+        "selected_model_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+        "fallback_model_uuids": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/uuid" } },
+        "rationale": { "type": "string" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "expected_cost": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+    "recorded_inputs_hash": { "type": "string", "description": "Hash of recorded routing inputs, enabling decision reproducibility (PLAN §7.2)." }
+  },
+  "required": ["task_uuid", "candidate_plan"]
+}

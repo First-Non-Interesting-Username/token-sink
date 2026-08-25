@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/review.schema.json",
+  "title": "Review record (PLAN §10.2, §10.5)",
+  "$ref": "common.schema.json#/$defs/versioned_record",
+  "properties": {
+    "finding_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "reviewer_agent_uuid": { "$ref": "common.schema.json#/$defs/uuid" },
+    "review_kind": {
+      "type": "string",
+      "enum": ["first_review", "independent_dispute", "poc_review"],
+      "description": "Disputes go to a separate reviewer (PLAN §10.2); PoC reviews run as four-agent panels."
+    },
+    "conclusion": { "type": "string", "enum": ["confirmed", "likely", "inconclusive", "incorrect"] },
+    "dissent": { "type": ["string", "null"] },
+    "poc_review_details": {
+      "type": "object",
+      "description": "Present for poc_review records (PLAN §10.5).",
+      "properties": {
+        "validity_verdict": { "type": "string" },
+        "reproduction_quality": { "type": "string" },
+        "scope_safety_verdict": { "type": "string", "enum": ["safe", "blocking_safety_issue"] },
+        "severity_impact_consistency": { "type": "string" },
+        "missing_evidence": { "type": "array", "items": { "type": "string" } },
+        "requested_changes": { "type": "array", "items": { "type": "string" } },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    }
+  },
+  "required": ["finding_uuid", "reviewer_agent_uuid", "review_kind", "conclusion"]
+}
