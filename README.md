@@ -28,3 +28,7 @@ This tool must only ever operate against explicitly authorized, in-scope
 targets. It is built for authorized vulnerability disclosure work (e.g.
 bug bounty programs with clear rules). Using it against systems you are not
 authorized to test is prohibited and unsupported.
+
+## Layout
+
+See [docs/repo-layout.md](docs/repo-layout.md) and PLAN.md §4.
