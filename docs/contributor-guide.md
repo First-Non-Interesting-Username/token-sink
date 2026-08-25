@@ -61,6 +61,19 @@ dependency, note it in the PR and update docs.
 - Storage stays behind the abstraction in `storage/` so agents never depend
   on the backend engine.
 
+## How to add benchmark tasks (PLAN §8.4)
+
+The suite lives in `evaluation/benchmarks.py`; the runner and CLI are covered
+in [benchmarks.md](benchmarks.md). To extend it:
+
+1. Add a `BenchTask` to `SUITE` — prompt + expected schema (optional) +
+   automated checks. Keep tasks non-sensitive: no live targets, no
+   operational data.
+2. Bump `SUITE_VERSION` if task content or checks change incompatibly;
+   recorded results carry the version so priors from different suites stay
+   distinguishable by the score system (#17).
+3. Add/extend mock-provider cases in `tests/unit/test_benchmark_runner.py`.
+
 ## Test requirements
 
 Layout and commands: [testing.md](testing.md). In short:
@@ -97,3 +110,4 @@ Layout and commands: [testing.md](testing.md). In short:
 - [Architecture overview](architecture.md)
 - [Operator guide](operator-guide.md)
 - [Safety & scope authoring](safety-and-scope.md)
+- [Benchmarks](benchmarks.md)
