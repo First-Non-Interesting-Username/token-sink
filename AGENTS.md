@@ -9,7 +9,8 @@ processes live in `docs/`, not here.**
   (product behavior, architecture, safety controls, acceptance criteria).
   Read it before doing anything; it is the source of truth for what we are
   building.
-- README.md — repo overview (add one once real code lands).
+- README.md — repo overview.
+- [docs/testing.md](docs/testing.md) — how to run the test suite and what CI enforces.
 
 ## Working rules
 
