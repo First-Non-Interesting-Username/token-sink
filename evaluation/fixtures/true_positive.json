@@ -1,0 +1,58 @@
+[
+  {
+    "id": "tp-001",
+    "category": "true_positive",
+    "title": "Reflected XSS in search results page",
+    "severity": "high",
+    "target": "https://app.example.com/search",
+    "vulnerability_class": "xss-reflected",
+    "description": "The 'q' query parameter is echoed into the page body without HTML encoding, allowing script injection via a crafted search URL.",
+    "ground_truth": {
+      "is_vulnerable": true,
+      "rationale": "Raw parameter reflected inside an unquoted <div> context; no CSP header set (verified via recorded response headers)."
+    },
+    "evidence": [
+      {
+        "kind": "http_response_excerpt",
+        "url": "https://app.example.com/search?q=<script>1</script>",
+        "excerpt": "<div class=\"results\">You searched for <script>1</script></div>",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000tp001a",
+        "source_status": "recorded"
+      },
+      {
+        "kind": "http_header_set",
+        "url": "https://app.example.com/search?q=probe",
+        "headers": {"Content-Type": "text/html", "X-Cache": "miss"},
+        "note": "No Content-Security-Policy header present.",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000tp001b",
+        "source_status": "recorded"
+      }
+    ],
+    "expected_reviewer_verdicts": ["confirmed", "confirmed"],
+    "notes": "Ground truth: real. Both reviewers should confirm; false-negative here indicates reviewer under-detection."
+  },
+  {
+    "id": "tp-002",
+    "category": "true_positive",
+    "title": "IDOR on invoice download endpoint",
+    "severity": "critical",
+    "target": "https://api.example.com/v1/invoices/{id}/download",
+    "vulnerability_class": "idor",
+    "description": "Sequential invoice IDs are authorized only by session presence, not ownership; substituting another user's ID returns their document.",
+    "ground_truth": {
+      "is_vulnerable": true,
+      "rationale": "Recorded pair of requests with two test accounts shows object-level authorization is absent."
+    },
+    "evidence": [
+      {
+        "kind": "request_pair_comparison",
+        "request_a": "GET /v1/invoices/10041/download as user-a (200, PDF bytes)",
+        "request_b": "GET /v1/invoices/10042/download as user-a (200, PDF bytes belonging to user-b)",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000tp002a",
+        "source_status": "recorded"
+      }
+    ],
+    "expected_reviewer_verdicts": ["confirmed", "confirmed"],
+    "notes": "Ground truth: real. Tests that reviewers accept strong comparative evidence."
+  }
+]

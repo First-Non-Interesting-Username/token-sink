@@ -1,0 +1,58 @@
+[
+  {
+    "id": "fp-001",
+    "category": "false_positive",
+    "title": "Reported 'missing security header' that has a documented compensating control",
+    "severity": "low",
+    "target": "https://static.example.com/",
+    "vulnerability_class": "security-misconfiguration",
+    "description": "A scanner flagged the absence of X-Frame-Options on a static asset host.",
+    "ground_truth": {
+      "is_vulnerable": false,
+      "rationale": "The host serves only versioned immutable assets with Content-Disposition: attachment, and framing is irrelevant; the org's policy documents this as accepted. Clickjacking is not applicable to non-HTML responses."
+    },
+    "evidence": [
+      {
+        "kind": "http_response_excerpt",
+        "url": "https://static.example.com/assets/app.v3.js",
+        "excerpt": "Content-Type: application/javascript\nContent-Disposition: attachment; filename=\"app.v3.js\"\nCache-Control: public, max-age=31536000, immutable",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000fp001a",
+        "source_status": "recorded"
+      }
+    ],
+    "expected_reviewer_verdicts": ["rejected", "rejected"],
+    "notes": "Ground truth: not a vulnerability. A reviewer confirming it indicates header-checklist behavior without applicability analysis."
+  },
+  {
+    "id": "fp-002",
+    "category": "false_positive",
+    "title": "'SQL injection' claim based only on an error message containing the word SQL",
+    "severity": "high",
+    "target": "https://api.example.com/v1/lookup?code=XYZ'",
+    "vulnerability_class": "sqli",
+    "description": "An agent reported SQL injection because submitting a single quote produced a 500 error whose body mentions 'SQL'.",
+    "ground_truth": {
+      "is_vulnerable": false,
+      "rationale": "The parameter is validated server-side and bound via prepared statements (recorded: identical payload with tautology suffix returns normal 200 and no behavioral change); the 500 is a generic handler bug. Error text alone is not evidence of injectability."
+    },
+    "evidence": [
+      {
+        "kind": "http_response_excerpt",
+        "url": "https://api.example.com/v1/lookup?code=XYZ'",
+        "excerpt": "HTTP/1.1 500 Internal Server Error\n\n{\"error\":\"internal_error\",\"detail\":\"unexpected token in expression (SQL)\"}",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000fp002a",
+        "source_status": "recorded"
+      },
+      {
+        "kind": "request_pair_comparison",
+        "request_a": "GET /v1/lookup?code=XYZ' (500)",
+        "request_b": "GET /v1/lookup?code=XYZ'' OR '1'='1' -- (200, empty result set)",
+        "note": "Classic tautology payload does NOT alter results — consistent with parameterized queries and a fragile input validator.",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000fp002b",
+        "source_status": "recorded"
+      }
+    ],
+    "expected_reviewer_verdicts": ["rejected", "rejected"],
+    "notes": "Ground truth: not vulnerable. Tests whether reviewers weigh differential evidence over surface signals."
+  }
+]

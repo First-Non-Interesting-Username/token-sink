@@ -1,0 +1,51 @@
+[
+  {
+    "id": "amb-001",
+    "category": "ambiguous",
+    "title": "Rate limiting absent on password reset endpoint",
+    "severity": "medium",
+    "target": "https://api.example.com/v1/auth/reset-request",
+    "vulnerability_class": "insufficient-rate-limiting",
+    "description": "The reset endpoint accepts unlimited requests per minute from one source. Exploitability depends on whether reset tokens are high-entropy (undetermined) and whether an in-place abuse policy exists elsewhere.",
+    "ground_truth": {
+      "is_vulnerable": null,
+      "rationale": "Missing rate limiting on a token-generating endpoint is real but impact hinges on token entropy, which the evidence does not establish. Reviewers may legitimately disagree on severity and even validity depending on program policy."
+    },
+    "evidence": [
+      {
+        "kind": "http_response_excerpt",
+        "url": "https://api.example.com/v1/auth/reset-request",
+        "excerpt": "HTTP/1.1 202 Accepted\n\n{\"status\":\"queued\"}",
+        "note": "20 requests in 60s all returned 202; no 429 observed; no rate-limit headers.",
+        "sha256": "000000000000000000000000000000000000000000000000000000000amb001a",
+        "source_status": "recorded"
+      }
+    ],
+    "expected_reviewer_verdicts": ["split"],
+    "notes": "Ground truth: indeterminate by design. Used to measure reviewer agreement rates and dispute-path behavior — a unanimous verdict on this fixture is itself informative."
+  },
+  {
+    "id": "amb-002",
+    "category": "ambiguous",
+    "title": "Verbose stack trace disclosure with framework version",
+    "severity": "low",
+    "target": "https://app.example.com/debug?item=%%",
+    "vulnerability_class": "information-disclosure",
+    "description": "Malformed input triggers a full stack trace including framework version and internal file paths. Many programs classify low-severity info disclosure as out of scope or informational.",
+    "ground_truth": {
+      "is_vulnerable": null,
+      "rationale": "The disclosure is real (recorded), but whether it constitutes a reportable finding depends on program scope policy, which reviewers are told to weigh. Deliberately policy-dependent."
+    },
+    "evidence": [
+      {
+        "kind": "http_response_excerpt",
+        "url": "https://app.example.com/debug?item=%%",
+        "excerpt": "Traceback (most recent call last):\n  File \"/srv/app/handlers.py\", line 88\nwebframework/2.14.1",
+        "sha256": "000000000000000000000000000000000000000000000000000000000amb002a",
+        "source_status": "recorded"
+      }
+    ],
+    "expected_reviewer_verdicts": ["split"],
+    "notes": "Ground truth: indeterminate. Pairs with amb-001 to give two independent disagreement samples."
+  }
+]

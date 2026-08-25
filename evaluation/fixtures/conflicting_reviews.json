@@ -1,0 +1,92 @@
+[
+  {
+    "id": "cr-001",
+    "category": "conflicting_reviews",
+    "title": "Open redirect via 'next' parameter — reviewers split on exploitability",
+    "severity": "medium",
+    "target": "https://app.example.com/login?next=//evil.example.net",
+    "vulnerability_class": "open-redirect",
+    "description": "The login redirect target accepts protocol-relative external URLs.",
+    "ground_truth": {
+      "is_vulnerable": true,
+      "rationale": "The redirect itself is real; the conflict is over severity (phishing vector vs. low-impact), not existence."
+    },
+    "evidence": [
+      {
+        "kind": "http_response_excerpt",
+        "url": "https://app.example.com/login?next=//evil.example.net",
+        "excerpt": "HTTP/1.1 302 Found\nLocation: //evil.example.net",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000cr001a",
+        "source_status": "recorded"
+      }
+    ],
+    "reviews": [
+      {
+        "reviewer_id": "reviewer-alpha",
+        "verdict": "confirmed",
+        "confidence": 0.8,
+        "reasoning": "Protocol-relative redirect to an attacker-controlled origin is a classic phishing enabler; program lists social-engineering enablers as in-scope."
+      },
+      {
+        "reviewer_id": "reviewer-beta",
+        "verdict": "rejected",
+        "confidence": 0.6,
+        "reasoning": "Redirect requires user interaction and the domain is only controllable during a demo window; impact is negligible. Should be informational."
+      }
+    ],
+    "expected_outcome": "dispute_path",
+    "notes": "Exercises the independent dispute review path (PLAN §10): first cycle split, dispute must be scheduled rather than auto-resolving."
+  },
+  {
+    "id": "cr-002",
+    "category": "conflicting_reviews",
+    "title": "Reflected file download (RFD) — one reviewer, two contradictory opinions across cycles",
+    "severity": "low",
+    "target": "https://api.example.com/v1/export?format=json&q=ping",
+    "vulnerability_class": "reflected-file-download",
+    "description": "JSONP-style callback parameter is reflected in a Content-Disposition attachment header.",
+    "ground_truth": {
+      "is_vulnerable": false,
+      "rationale": "Reflection exists but the response Content-Type is application/json with nosniff, so no browser will execute it as a script; reviewer-beta's rejection is correct."
+    },
+    "evidence": [
+      {
+        "kind": "http_response_excerpt",
+        "url": "https://api.example.com/v1/export?format=json&cb=alert(1)",
+        "excerpt": "HTTP/1.1 200 OK\nContent-Type: application/json\nX-Content-Type-Options: nosniff\nContent-Disposition: attachment; filename=\"f.json\"; callback=alert(1)",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000cr002a",
+        "source_status": "recorded"
+      }
+    ],
+    "reviews": [
+      {
+        "reviewer_id": "reviewer-gamma",
+        "verdict": "confirmed",
+        "confidence": 0.55,
+        "reasoning": "Header reflection with attacker-controlled content is unusual and worth flagging."
+      },
+      {
+        "reviewer_id": "reviewer-delta",
+        "verdict": "confirmed",
+        "confidence": 0.7,
+        "reasoning": "Same as gamma; pattern-matched to known RFD writeups."
+      },
+      {
+        "reviewer_id": "reviewer-epsilon",
+        "verdict": "rejected",
+        "confidence": 0.9,
+        "reasoning": "nosniff + application/json + attachment defeats every documented RFD exploitation path; reflection alone is not exploitable here.",
+        "changed_from_previous_cycle": null
+      },
+      {
+        "reviewer_id": "reviewer-delta",
+        "verdict": "rejected",
+        "confidence": 0.75,
+        "reasoning": "On re-examination of the nosniff interaction, concurring with epsilon; withdrawing earlier confirmation.",
+        "changed_from_previous_cycle": "confirmed -> rejected"
+      }
+    ],
+    "expected_outcome": "rejected_with_dissent_recorded",
+    "notes": "Tests that opinion changes between review cycles are recorded append-only and that dissent from reviewer-gamma survives into the audit trail even though the majority rejects."
+  }
+]
