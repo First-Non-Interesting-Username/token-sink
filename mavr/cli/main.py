@@ -205,33 +205,210 @@ def asyncio_run(coro):  # small helper to keep doctor output sync
 
 
 @serve_app.command("run")
-def serve_run() -> None:
+def serve_run(
+    config: str | None = typer.Option(None, "--config", help="Path to user config overlay."),
+    host: str | None = typer.Option(None, "--host", help="Override server.host."),
+    port: int | None = typer.Option(None, "--port", help="Override server.port."),
+    allow_lan: bool = typer.Option(
+        False, "--allow-lan", help="Bind on a non-loopback address (must pair with --human-approved)."
+    ),
+    human_approved: bool = typer.Option(
+        False,
+        "--human-approved/--no-human-approved",
+        help="Explicitly confirm non-loopback binding is authorized.",
+    ),
+    token: str | None = typer.Option(
+        None,
+        "--token",
+        help="Use a specific bearer token (default: auto-generated, shown once).",
+    ),
+    print_token: bool = typer.Option(
+        True,
+        "--print-token/--no-print-token",
+        help="Print the bearer token to stdout on startup.",
+    ),
+) -> None:
     """Start the local API and UI server."""
-    _not_implemented("system serve")
+    import uvicorn
+
+    from mavr.api import build_app
+    from mavr.observability.logging import configure_logging as _configure_logging
+    from mavr.storage.database import Database, apply_migrations, expand_db_path
+
+    cfg = _resolve_config_or_exit(config)
+    _configure_logging(level=cfg.logging.level, json=cfg.logging.json_output)
+
+    if host:
+        cfg.server.host = host
+    if port:
+        cfg.server.port = port
+    if allow_lan:
+        cfg.server.allow_lan = True
+
+    db = Database(expand_db_path(cfg.storage.db_path))
+    asyncio_run(apply_migrations(db, "up"))
+
+    app = build_app(
+        config=cfg,
+        db=db,
+        bind_host=cfg.server.host,
+        allow_lan=allow_lan,
+        human_approved=human_approved,
+        token=token,
+    )
+    if print_token:
+        console.print(
+            f"[bold green]MAVR serving at[/bold green] {app.url()}\n"
+            f"[bold green]bearer token:[/bold green] {app.bearer_token()}\n"
+            f"[yellow]keep this token secret; it is shown only once.[/yellow]"
+        )
+    uvicorn.run(
+        app.app,
+        host=cfg.server.host,
+        port=cfg.server.port,
+        log_level=cfg.logging.level.lower(),
+        access_log=False,
+    )
 
 
 @campaign_app.command("list")
-def campaign_list() -> None:
+def campaign_list(
+    config: str | None = typer.Option(None, "--config", help="Path to user config overlay."),
+    limit: int = typer.Option(20, "--limit", help="Max rows to display."),
+) -> None:
     """List campaigns."""
-    _not_implemented("system campaign list")
+    from mavr.api import db as api_db
+    from mavr.observability.logging import configure_logging as _configure_logging
+    from mavr.storage.database import Database, apply_migrations, expand_db_path
+
+    cfg = _resolve_config_or_exit(config)
+    _configure_logging(level=cfg.logging.level, json=cfg.logging.json_output)
+    db = Database(expand_db_path(cfg.storage.db_path))
+    asyncio_run(apply_migrations(db, "up"))
+    rows = asyncio_run(api_db.list_campaigns(db, limit=limit))
+    if not rows:
+        console.print("[blue]no campaigns[/blue]")
+        return
+    for r in rows:
+        console.print(
+            f"  [bold]{r['id'][:8]}[/bold] [{r['state']:>9}] {r['name']}"
+        )
 
 
 @campaign_app.command("new")
-def campaign_new() -> None:
+def campaign_new(
+    name: str = typer.Option(..., "--name", help="Campaign name."),
+    description: str = typer.Option("", "--description", help="Free-text description."),
+    target: str = typer.Option(..., "--target", help="Single allowed target (host or URL)."),
+    duration_hours: int = typer.Option(24, "--duration-hours", help="Max duration in hours."),
+    config: str | None = typer.Option(None, "--config", help="Path to user config overlay."),
+) -> None:
     """Create a new campaign."""
-    _not_implemented("system campaign new")
+    from mavr.api import db as api_db
+    from mavr.observability.logging import configure_logging as _configure_logging
+    from mavr.storage.database import Database, apply_migrations, expand_db_path
+
+    cfg = _resolve_config_or_exit(config)
+    _configure_logging(level=cfg.logging.level, json=cfg.logging.json_output)
+    db = Database(expand_db_path(cfg.storage.db_path))
+    asyncio_run(apply_migrations(db, "up"))
+    cid = asyncio_run(
+        api_db.create_campaign(
+            db,
+            name=name,
+            description=description,
+            target_spec={"hosts": [target]},
+            duration_hours=duration_hours,
+        )
+    )
+    console.print(f"[green]created campaign[/green] id={cid}")
 
 
 @campaign_app.command("show")
-def campaign_show() -> None:
+def campaign_show(
+    campaign_id: str = typer.Argument(..., help="Campaign id."),
+    config: str | None = typer.Option(None, "--config", help="Path to user config overlay."),
+) -> None:
     """Show campaign details."""
-    _not_implemented("system campaign show")
+    from mavr.api import db as api_db
+    from mavr.observability.logging import configure_logging as _configure_logging
+    from mavr.storage.database import Database, apply_migrations, expand_db_path
+
+    cfg = _resolve_config_or_exit(config)
+    _configure_logging(level=cfg.logging.level, json=cfg.logging.json_output)
+    db = Database(expand_db_path(cfg.storage.db_path))
+    asyncio_run(apply_migrations(db, "up"))
+
+    async def _run() -> dict[str, Any]:
+        campaign = await api_db.get_campaign(db, campaign_id)
+        if campaign is None:
+            return {}
+        scope = await api_db.get_scope_policy(db, campaign_id)
+        agents = await api_db.list_agents(db, campaign_id=campaign_id, limit=200)
+        tasks = await api_db.list_tasks(db, campaign_id=campaign_id, limit=200)
+        findings = await api_db.list_findings(db, campaign_id=campaign_id, limit=200)
+        return {
+            "campaign": campaign,
+            "scope": scope,
+            "agents": agents,
+            "tasks": tasks,
+            "findings": findings,
+        }
+
+    data = asyncio_run(_run())
+    if not data:
+        console.print(f"[red]campaign {campaign_id} not found[/red]")
+        raise typer.Exit(code=1)
+    c = data["campaign"]
+    console.print(
+        f"[bold]{c['name']}[/bold] ({c['id']})\n"
+        f"  state={c['state']}  human_approved={c['human_approved']}  "
+        f"duration={c['duration_hours']}h"
+    )
+    if data["scope"]:
+        s = data["scope"]
+        console.print(
+            f"  scope: active_testing={s.get('active_testing')} "
+            f"targets={s.get('allowed_targets')} methods={s.get('allowed_methods')}"
+        )
+    console.print(
+        f"  agents={len(data['agents'])}  tasks={len(data['tasks'])}  "
+        f"findings={len(data['findings'])}"
+    )
 
 
 @campaign_app.command("export")
-def campaign_export() -> None:
-    """Export a campaign run bundle."""
-    _not_implemented("system campaign export")
+def campaign_export(
+    campaign_id: str = typer.Argument(..., help="Campaign id."),
+    output: str | None = typer.Option(None, "--output", "-o", help="Output zip path."),
+    config: str | None = typer.Option(None, "--config", help="Path to user config overlay."),
+) -> None:
+    """Export a redacted run bundle for the campaign."""
+    from mavr.observability.bundle import export_run_bundle
+    from mavr.observability.logging import configure_logging as _configure_logging
+    from mavr.storage.database import Database, apply_migrations, expand_db_path
+
+    cfg = _resolve_config_or_exit(config)
+    _configure_logging(level=cfg.logging.level, json=cfg.logging.json_output)
+    db = Database(expand_db_path(cfg.storage.db_path))
+    asyncio_run(apply_migrations(db, "up"))
+    out = Path(output).expanduser() if output else (
+        Path(cfg.storage.artifact_dir).expanduser() / "bundles" / f"{campaign_id}.zip"
+    )
+    result = asyncio_run(
+        export_run_bundle(
+            db,
+            campaign_id=campaign_id,
+            output_path=out,
+            config_snapshot=cfg,
+        )
+    )
+    console.print(
+        f"[green]exported run bundle[/green]\n"
+        f"  path={result.path}\n"
+        f"  size={result.size_bytes} bytes\n"
+        f"  entries={result.entry_count}"
+    )
 
 
 @provider_app.command("list")
@@ -681,15 +858,84 @@ def approval_create(
 
 
 @logs_app.command("tail")
-def logs_tail() -> None:
-    """Tail structured logs."""
-    _not_implemented("system logs tail")
+def logs_tail(
+    config: str | None = typer.Option(None, "--config", help="Path to user config overlay."),
+    last_id: int = typer.Option(0, "--last-id", help="Start after this event id (default 0)."),
+    follow: bool = typer.Option(
+        True, "--follow/--no-follow", help="Continue tailing the live event stream."
+    ),
+    interval: float = typer.Option(1.0, "--interval", help="Polling interval in seconds."),
+) -> None:
+    """Tail the structured event bus."""
+    from mavr.observability.events import EventBus
+    from mavr.observability.logging import configure_logging as _configure_logging
+    from mavr.storage.database import Database, apply_migrations, expand_db_path
+
+    cfg = _resolve_config_or_exit(config)
+    _configure_logging(level=cfg.logging.level, json=cfg.logging.json_output)
+    db = Database(expand_db_path(cfg.storage.db_path))
+    asyncio_run(apply_migrations(db, "up"))
+    bus = EventBus(db)
+    seen = int(last_id)
+    if seen == 0:
+        # Seed with the latest 20 so the user sees context.
+        seed = asyncio_run(bus.latest(20))
+        for e in seed:
+            console.print(
+                f"[{e.severity:>7}] id={e.id:>6} {e.created_at} {e.event_type} {e.payload}"
+            )
+            seen = max(seen, e.id)
+    import time as _time
+
+    try:
+        while True:
+            tail = asyncio_run(bus.list_since(seen, limit=200))
+            for e in tail:
+                console.print(
+                    f"[{e.severity:>7}] id={e.id:>6} {e.created_at} {e.event_type} {e.payload}"
+                )
+                seen = max(seen, e.id)
+            if not follow:
+                break
+            _time.sleep(max(0.1, float(interval)))
+    except KeyboardInterrupt:
+        return
 
 
 @logs_app.command("export")
-def logs_export() -> None:
-    """Export redacted logs."""
-    _not_implemented("system logs export")
+def logs_export(
+    output: str = typer.Option(..., "--output", "-o", help="Output JSONL path."),
+    config: str | None = typer.Option(None, "--config", help="Path to user config overlay."),
+    campaign_id: str | None = typer.Option(None, "--campaign", help="Filter by campaign id."),
+) -> None:
+    """Export a redacted JSONL of all events (or those for one campaign)."""
+    import json as _json
+
+    from mavr.observability.events import EventBus
+    from mavr.observability.logging import configure_logging as _configure_logging
+    from mavr.storage.database import Database, apply_migrations, expand_db_path
+
+    cfg = _resolve_config_or_exit(config)
+    _configure_logging(level=cfg.logging.level, json=cfg.logging.json_output)
+    db = Database(expand_db_path(cfg.storage.db_path))
+    asyncio_run(apply_migrations(db, "up"))
+    bus = EventBus(db)
+    out_path = Path(output).expanduser()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    seen = 0
+    written = 0
+    with out_path.open("w", encoding="utf-8") as fh:
+        while True:
+            batch = asyncio_run(bus.list_since(seen, limit=500))
+            if not batch:
+                break
+            for e in batch:
+                if campaign_id is not None and e.campaign_id != campaign_id:
+                    continue
+                fh.write(_json.dumps(e.to_sse(), ensure_ascii=False) + "\n")
+                written += 1
+                seen = max(seen, e.id)
+    console.print(f"[green]wrote {written} events[/green] to {out_path}")
 
 
 if __name__ == "__main__":

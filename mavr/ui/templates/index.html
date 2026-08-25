@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>MAVR · Local Console</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/static/mavr.css" />
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/mavr.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">MAVR</div>
+    <nav class="nav">
+      <a href="/dashboard">Dashboard</a>
+      <a href="/activity">Activity</a>
+      <a href="/findings">Findings</a>
+      <a href="/providers">Providers</a>
+      <a href="/usage">Usage</a>
+      <a href="/policy">Policy</a>
+      <a href="/logs">Logs</a>
+    </nav>
+    <div class="status" id="ks-banner" data-state="off">kill switch: <span>off</span></div>
+  </header>
+  <main>
+    <section class="welcome">
+      <h1>Welcome</h1>
+      <p>
+        MAVR is running locally. The API is at
+        <code>{{ url }}</code> and the bearer token is shown once at
+        <code>system serve</code> startup. Use the navigation above to
+        drive the system.
+      </p>
+      <p>
+        The browser must reach the API on loopback. The live event
+        stream uses Server-Sent Events; your client transparently
+        reconnects after a dropped connection and replays any events
+        it missed using <code>last_event_id</code>.
+      </p>
+      <input id="api-token" type="hidden" value="{{ token }}" />
+    </section>
+  </main>
+</body>
+</html>

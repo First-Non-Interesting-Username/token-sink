@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>MAVR · Policy &amp; approvals</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/static/mavr.css" />
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/mavr.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">MAVR</div>
+    <nav class="nav">
+      <a href="/dashboard">Dashboard</a>
+      <a href="/activity">Activity</a>
+      <a href="/findings">Findings</a>
+      <a href="/providers">Providers</a>
+      <a href="/usage">Usage</a>
+      <a href="/policy" class="active">Policy</a>
+      <a href="/logs">Logs</a>
+    </nav>
+    <div class="status" id="ks-banner" data-state="off">kill switch: <span>off</span></div>
+  </header>
+  <main>
+    <h1>Policy &amp; approvals</h1>
+    <h2>Pending approvals</h2>
+    <ul id="approvals" class="approval-list"><li><em>Loading…</em></li></ul>
+
+    <h2>Kill switch</h2>
+    <div id="ks-body" hx-get="/api/kill_switch" hx-trigger="load" hx-swap="innerHTML">
+      <em>Loading…</em>
+    </div>
+
+    <h2>Audit history (latest 50)</h2>
+    <ul id="audit-list" class="audit-list"><li><em>Loading…</em></li></ul>
+  </main>
+  <input id="api-token" type="hidden" value="{{ token }}" />
+  <script>
+    window.addEventListener("DOMContentLoaded", () => {
+      const tok = document.getElementById("api-token").value;
+      const headers = { "Authorization": "Bearer " + tok };
+      fetch("/api/approvals", { headers }).then(r => r.ok ? r.json() : []).then(rows => {
+        const ul = document.getElementById("approvals");
+        if (!rows.length) { ul.innerHTML = "<li><em>No approvals issued yet.</em></li>"; return; }
+        ul.innerHTML = rows.map(a => `
+          <li>
+            <span class="badge">${a.action}</span>
+            <code>${a.id.slice(0,8)}</code>
+            <span class="muted">by ${a.actor} · ${a.consumed_at ? "consumed" : (a.revoked_at ? "revoked" : "pending")}</span>
+            <span class="muted">expires ${a.expires_at}</span>
+          </li>
+        `).join("");
+      });
+      fetch("/api/audit", { headers }).then(r => r.ok ? r.json() : []).then(rows => {
+        const ul = document.getElementById("audit-list");
+        if (!rows.length) { ul.innerHTML = "<li><em>No audit events yet.</em></li>"; return; }
+        ul.innerHTML = rows.slice(0, 50).map(a => `
+          <li>
+            <code>${a.id}</code>
+            <span class="badge">${a.category}</span>
+            ${a.subject_kind}:${a.subject_id || "-"} · ${a.prior_state || "—"} → ${a.new_state || "—"}
+            <span class="muted">by ${a.actor_kind}:${a.actor_id || "—"}</span>
+          </li>
+        `).join("");
+      });
+    });
+  </script>
+</body>
+</html>
