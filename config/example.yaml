@@ -1,0 +1,39 @@
+# Example configuration for token-sink (YAML).
+# Copy to config/tokensink.yaml and adjust. All values below are the safe
+# defaults or harmless examples — no real credentials belong in this file
+# (use secret-store references, see docs/config.md).
+
+server:
+  host: 127.0.0.1
+  port: 8737
+
+storage:
+  database_path: data/tokensink.db
+  artifact_path: data/artifacts
+
+providers:
+  credential_refs:
+    # References into your OS credential store / secret manager.
+    openrouter: op://vault/openrouter-key
+  allowlist:
+    - openrouter
+
+routing:
+  free_only: true
+  router_count: 2
+
+budgets:
+  agent_timeout_seconds: 900
+  max_tokens_per_agent: 500000
+
+review:
+  quorum: 4
+
+retention:
+  days: 90
+
+redaction:
+  enabled: true
+
+logging:
+  level: INFO
