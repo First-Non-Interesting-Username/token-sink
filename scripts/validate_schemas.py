@@ -46,9 +46,7 @@ def main() -> int:
             expected = path.name.replace(".schema.json", "")
             rt = doc["properties"]["record_type"]
             if rt.get("const") != expected:
-                errors.append(
-                    f"{path.name}: record_type const {rt.get('const')!r} != {expected!r}"
-                )
+                errors.append(f"{path.name}: record_type const {rt.get('const')!r} != {expected!r}")
             for key in ("schema_version", "record_type"):
                 if key not in req:
                     errors.append(f"{path.name}: {key} not in required list")
@@ -58,24 +56,22 @@ def main() -> int:
     for name, doc in schemas.items():
         path = SCHEMA_DIR / name
 
-        def walk(node):
+        def walk(node, _path=path, _doc=doc):  # bind loop vars now (B023)
             if isinstance(node, dict):
                 if "$ref" in node:
                     m = REF_RE.match(node["$ref"])
                     if not m:
-                        errors.append(f"{path.name}: unparseable $ref {node['$ref']!r}")
+                        errors.append(f"{_path.name}: unparseable $ref {node['$ref']!r}")
                     else:
-                        target_file = m.group(1) or path.name
+                        target_file = m.group(1) or _path.name
                         def_name = m.group(2)
-                        if target_file not in schemas and target_file != path.name:
-                            errors.append(
-                                f"{path.name}: $ref to missing file {target_file}"
-                            )
+                        if target_file not in schemas and target_file != _path.name:
+                            errors.append(f"{_path.name}: $ref to missing file {target_file}")
                         elif def_name:
-                            target = schemas.get(target_file, doc)
+                            target = schemas.get(target_file, _doc)
                             if def_name not in target.get("$defs", {}):
                                 errors.append(
-                                    f"{path.name}: $ref to missing $defs/{def_name} "
+                                    f"{_path.name}: $ref to missing $defs/{def_name} "
                                     f"in {target_file}"
                                 )
                 for v in node.values():
