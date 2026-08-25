@@ -15,7 +15,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: pip install -e '.[dev]' ruff
+        run: |
+          pip install -e '.[dev]'
+          pip install 'ruff==0.12.*'
       - name: Lint
         run: ruff check .
       - name: Run tests
