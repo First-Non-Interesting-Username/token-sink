@@ -15,6 +15,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
+from policy.ratelimit import AcquireResult, RateLimiter
 from policy.scope import ACTIVE_TEST_CLASSES, HARD_PROHIBITED_ACTIONS, ScopePolicy
 from policy.ssrf import SSRFGuard
 
@@ -89,10 +90,22 @@ def assess_scope(scope: ScopePolicy | None) -> ScopeStatus:
 class PolicyEngine:
     """Evaluates tool calls against a campaign's ScopePolicy (§5)."""
 
-    def __init__(self, scope: ScopePolicy | None, ssrf_guard: SSRFGuard | None = None):
+    def __init__(
+        self,
+        scope: ScopePolicy | None,
+        ssrf_guard: SSRFGuard | None = None,
+        rate_limiter: RateLimiter | None = None,
+    ):
         self.scope = scope
         self._scope_status = assess_scope(scope)
         self._ssrf = ssrf_guard or SSRFGuard()
+        # Shared limiter (issue #80): enforced here as a pre-dispatch gate so
+        # anything going through policy cannot bypass rate limits, even when a
+        # caller skips the router. Callers may inject one shared instance so
+        # all engines in the process count against the same windows.
+        self._limiter = rate_limiter or RateLimiter()
+        if scope is not None:
+            self._limiter.configure_from_scope(scope)
         self._blocked_events: dict[str, BlockedAction] = {}
 
     @property
@@ -123,6 +136,29 @@ class PolicyEngine:
             actionable,
             blocked_event_id=event_id,
             violations=list(violations),
+        )
+
+    @property
+    def rate_limiter(self) -> RateLimiter:
+        """The shared limiter, exposed for routers/agents needing wait() backpressure."""
+        return self._limiter
+
+    def _rate_limit_check(self, request: ToolCallRequest) -> PolicyDecision | None:
+        """Pre-dispatch rate-limit gate (issue #80). Returns a block decision
+        when any configured budget (endpoint/target/campaign/global) is full;
+        None when the request may proceed."""
+        endpoint = str(request.metadata.get("endpoint", "")) if request.metadata else ""
+        result: AcquireResult = self._limiter.acquire(
+            endpoint=endpoint,
+            target=request.target,
+            campaign_uuid=request.campaign_uuid,
+        )
+        if result.allowed:
+            return None
+        return self._block(
+            request,
+            "backpressure: request deferred rather than exceeding limits — " + result.explanation,
+            [f"rate_limited:{result.limiting_dimension}"],
         )
 
     def evaluate(self, request: ToolCallRequest) -> PolicyDecision:
@@ -226,6 +262,14 @@ class PolicyEngine:
                         f"SSRF protection: {verdict.reason}",
                         ["ssrf_blocked"],
                     )
+
+        # 8. Rate-limit gate LAST among checks: it consumes budget, so only
+        # spend a slot on requests that already passed every safety/policy
+        # check. Enforcement here means bypassing the router still can't
+        # exceed configured limits (issue #80).
+        rate_decision = self._rate_limit_check(request)
+        if rate_decision is not None:
+            return rate_decision
 
         return PolicyDecision(True, self._scope_status, "allowed by campaign policy")
 
