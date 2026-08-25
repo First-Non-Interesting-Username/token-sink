@@ -37,6 +37,7 @@ provider_app = typer.Typer(help="Inspect and test providers.", no_args_is_help=T
 model_app = typer.Typer(help="Inspect models and run benchmarks.", no_args_is_help=True)
 finding_app = typer.Typer(help="Inspect and manage findings.", no_args_is_help=True)
 report_app = typer.Typer(help="Export and submit final reports.", no_args_is_help=True)
+approval_app = typer.Typer(help="Mint and revoke human-approval tokens.", no_args_is_help=True)
 logs_app = typer.Typer(help="View structured logs and diagnostics.", no_args_is_help=True)
 
 app.add_typer(init_app, name="init")
@@ -47,6 +48,7 @@ app.add_typer(provider_app, name="provider")
 app.add_typer(model_app, name="model")
 app.add_typer(finding_app, name="finding")
 app.add_typer(report_app, name="report")
+app.add_typer(approval_app, name="approval")
 app.add_typer(logs_app, name="logs")
 
 
@@ -397,27 +399,285 @@ def model_benchmark(
 
 
 @finding_app.command("list")
-def finding_list() -> None:
-    """List findings."""
-    _not_implemented("system finding list")
+def finding_list(
+    config: str | None = typer.Option(None, "--config", help="Path to user config overlay."),
+    campaign: str | None = typer.Option(None, "--campaign", help="Filter by campaign id."),
+    state: str | None = typer.Option(None, "--state", help="Filter by finding state."),
+    limit: int = typer.Option(20, "--limit", help="Max rows to display."),
+) -> None:
+    """List findings (most recent first)."""
+
+    from mavr.observability.logging import configure_logging as _configure_logging
+    from mavr.storage.database import Database, apply_migrations, expand_db_path
+
+    cfg = _resolve_config_or_exit(config)
+    _configure_logging(level=cfg.logging.level, json=cfg.logging.json_output)
+    db = Database(expand_db_path(cfg.storage.db_path))
+    asyncio_run(apply_migrations(db, "up"))
+
+    async def _run() -> list[dict[str, Any]]:
+        async with db.acquire() as conn:
+            sql = (
+                "SELECT id, campaign_id, title, state, severity, confidence, "
+                "current_version, tombstoned, updated_at FROM findings "
+            )
+            clauses: list[str] = []
+            params: list[Any] = []
+            if campaign:
+                clauses.append("campaign_id = ?")
+                params.append(campaign)
+            if state:
+                clauses.append("state = ?")
+                params.append(state)
+            if clauses:
+                sql += "WHERE " + " AND ".join(clauses) + " "
+            sql += "ORDER BY updated_at DESC LIMIT ?"
+            params.append(limit)
+            cur = await conn.execute(sql, params)
+            return [dict(r) for r in await cur.fetchall()]
+
+    rows = asyncio_run(_run())
+    if not rows:
+        console.print("[blue]no findings[/blue]")
+        return
+    for r in rows:
+        sev = r["severity"] or "-"
+        tomb = " [red](tombstoned)[/red]" if r["tombstoned"] else ""
+        console.print(
+            f"  [bold]{r['id'][:8]}[/bold] [{r['state']}] {sev:>8} v{r['current_version']} "
+            f"c={r['confidence'] or '-':>12} {r['title']}{tomb}"
+        )
 
 
 @finding_app.command("show")
-def finding_show() -> None:
-    """Show finding details."""
-    _not_implemented("system finding show")
+def finding_show(
+    finding_id: str = typer.Argument(..., help="Finding UUID."),
+    config: str | None = typer.Option(None, "--config", help="Path to user config overlay."),
+) -> None:
+    """Show a single finding, its history, versions, and reviews."""
+
+    from mavr.findings import lifecycle
+    from mavr.findings import reviews as reviews_mod
+    from mavr.findings.workflow import list_all_reviews
+    from mavr.observability.logging import configure_logging as _configure_logging
+    from mavr.storage.database import Database, apply_migrations, expand_db_path
+
+    cfg = _resolve_config_or_exit(config)
+    _configure_logging(level=cfg.logging.level, json=cfg.logging.json_output)
+    db = Database(expand_db_path(cfg.storage.db_path))
+    asyncio_run(apply_migrations(db, "up"))
+
+    async def _run() -> dict[str, Any]:
+        async with db.acquire() as conn:
+            finding = await lifecycle.get(conn, finding_id)
+            if finding is None:
+                return {"_missing": True}
+            history = await lifecycle.history(conn, finding_id)
+            reviews = await list_all_reviews(conn, finding_id)
+            summaries: list[reviews_mod.ReviewSummary] = []
+            for r in reviews:
+                s = await reviews_mod.get_summary(
+                    conn, finding_id=finding_id, version=r.version, mode="independent_first"
+                )
+                if s is not None:
+                    summaries.append(s)
+            return {
+                "finding": finding,
+                "history": history,
+                "reviews": reviews,
+                "summaries": summaries,
+            }
+
+    out = asyncio_run(_run())
+    if out.get("_missing"):
+        console.print(f"[red]finding {finding_id} not found[/red]")
+        raise typer.Exit(code=1)
+    f = out["finding"]
+    console.print(
+        f"[bold]{f.title}[/bold] ({f.id})\n"
+        f"  state={f.state.value}  severity={f.severity.value if f.severity else '-'}  "
+        f"confidence={f.confidence or '-'}  v{f.current_version}"
+        f"{'  [red]TOMBSTONED[/red]' if f.tombstoned else ''}"
+    )
+    if out["history"]:
+        console.print("  [bold]history:[/bold]")
+        for h in out["history"]:
+            console.print(
+                f"    {h['created_at']}  {h['prior_state']} -> {h['new_state']}  "
+                f"by {h['actor_kind']}:{h['actor_id'] or '-'}  {h['reason']}"
+            )
+    if out["reviews"]:
+        console.print("  [bold]reviews:[/bold]")
+        for r in out["reviews"]:
+            console.print(
+                f"    v{r.version}  {r.verdict.value:>16}  validity={r.validity}  "
+                f"scope_safety={r.scope_safety}  by {r.reviewer_agent_id[:8]}"
+            )
+    for s in out["summaries"]:
+        console.print(
+            f"  [bold]summary v{s.version}[/bold] mode={s.mode} quorum={s.quorum_policy} "
+            f"accept={s.accept_count}/reject={s.reject_count}/changes={s.request_changes_count} "
+            f"outcome={s.outcome}"
+        )
 
 
 @report_app.command("show")
-def report_show() -> None:
-    """Show a final report."""
-    _not_implemented("system report show")
+def report_show(
+    finding_id: str = typer.Argument(..., help="Finding UUID."),
+    config: str | None = typer.Option(None, "--config", help="Path to user config overlay."),
+) -> None:
+    """Show the final report paths and hash manifest for a finding."""
+
+    from mavr.observability.logging import configure_logging as _configure_logging
+    from mavr.storage.database import Database, apply_migrations, expand_db_path
+
+    cfg = _resolve_config_or_exit(config)
+    _configure_logging(level=cfg.logging.level, json=cfg.logging.json_output)
+    db = Database(expand_db_path(cfg.storage.db_path))
+    asyncio_run(apply_migrations(db, "up"))
+
+    async def _run() -> list[Any]:
+        async with db.acquire() as conn:
+            cur = await conn.execute(
+                "SELECT version, report_path, evidence_manifest_path, "
+                "redaction_manifest_path, hash_manifest, created_at "
+                "FROM final_reports WHERE finding_id = ? ORDER BY version",
+                (finding_id,),
+            )
+            return list(await cur.fetchall())
+
+    rows = asyncio_run(_run())
+    if not rows:
+        console.print("[blue]no final reports yet[/blue]")
+        return
+    for r in rows:
+        console.print(
+            f"  v{r['version']}  report={r['report_path']}\n"
+            f"    evidence={r['evidence_manifest_path']}\n"
+            f"    redaction={r['redaction_manifest_path']}\n"
+            f"    hash={r['hash_manifest']}  created={r['created_at']}"
+        )
 
 
 @report_app.command("submit")
-def report_submit() -> None:
-    """Submit a final report (requires human approval)."""
-    _not_implemented("system report submit")
+def report_submit(
+    finding_id: str = typer.Argument(..., help="Finding UUID."),
+    version: int = typer.Argument(..., help="Finding version."),
+    approval_token: str = typer.Option(
+        ..., "--approval-token", help="Token from `system approval create`."
+    ),
+    human_approved: bool = typer.Option(
+        False,
+        "--human-approved/--no-human-approved",
+        help="Explicitly confirm you typed a real approval token.",
+    ),
+    transport: str = typer.Option(
+        "manifest_only",
+        "--transport",
+        help="manifest_only (safe, default) or http (opt-in per campaign).",
+    ),
+    target: str = typer.Option(
+        "manifest-only", "--target", help="Submission target URL or label."
+    ),
+    output_dir: str | None = typer.Option(
+        None, "--output-dir", help="Override the report output directory."
+    ),
+    config: str | None = typer.Option(None, "--config", help="Path to user config overlay."),
+) -> None:
+    """Submit a finalized finding. NEVER automatic; requires an approval token."""
+
+    from mavr.observability.logging import configure_logging as _configure_logging
+    from mavr.reports import SubmissionError, submit
+    from mavr.storage.database import Database, apply_migrations, expand_db_path
+
+    if not human_approved:
+        console.print(
+            "[red]refusing to submit without --human-approved.[/red]\n"
+            "MAVR never submits automatically. Pass --human-approved to confirm.",
+        )
+        raise typer.Exit(code=2)
+
+    cfg = _resolve_config_or_exit(config)
+    _configure_logging(level=cfg.logging.level, json=cfg.logging.json_output)
+    db = Database(expand_db_path(cfg.storage.db_path))
+    asyncio_run(apply_migrations(db, "up"))
+    out_dir = output_dir or cfg.storage.artifact_dir
+
+    async def _run() -> Any:
+        async with db.acquire() as conn:
+            return await submit(
+                conn,
+                finding_id=finding_id,
+                version=version,
+                approval_token=approval_token,
+                output_dir=out_dir,
+                transport=transport,
+                target=target,
+                human_approved=True,
+            )
+
+    try:
+        result = asyncio_run(_run())
+    except SubmissionError as exc:
+        console.print(f"[red]submission refused:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+    console.print(
+        f"[green]submission recorded[/green]\n"
+        f"  manifest={result.manifest_path}\n"
+        f"  transport={result.transport}  target={result.target}\n"
+        f"  response_status={result.response_status}\n"
+        f"  approval_id={result.approval_id}\n"
+        f"  submitted_at={result.submitted_at.isoformat()}"
+    )
+
+
+@approval_app.command("create")
+def approval_create(
+    action: str = typer.Option(
+        ...,
+        "--action",
+        help="active_testing | submission | scope_change | deletion",
+    ),
+    actor: str = typer.Option(..., "--actor", help="Your identity (e.g. email or 'human')."),
+    campaign: str | None = typer.Option(None, "--campaign", help="Campaign id (optional)."),
+    finding: str | None = typer.Option(None, "--finding", help="Finding id (optional)."),
+    reason: str = typer.Option("", "--reason", help="Why you're approving this action."),
+    ttl: int = typer.Option(900, "--ttl", help="Token TTL in seconds (max 86400)."),
+    config: str | None = typer.Option(None, "--config", help="Path to user config overlay."),
+) -> None:
+    """Mint a human approval token for a privileged action."""
+
+    from mavr import approvals as approvals_mod
+    from mavr.observability.logging import configure_logging as _configure_logging
+    from mavr.storage.database import Database, apply_migrations, expand_db_path
+
+    cfg = _resolve_config_or_exit(config)
+    _configure_logging(level=cfg.logging.level, json=cfg.logging.json_output)
+    db = Database(expand_db_path(cfg.storage.db_path))
+    asyncio_run(apply_migrations(db, "up"))
+
+    async def _run() -> approvals_mod.Approval:
+        async with db.acquire() as conn:
+            return await approvals_mod.create(
+                conn,
+                action=action,
+                actor=actor,
+                reason=reason,
+                campaign_id=campaign,
+                finding_id=finding,
+                ttl_seconds=ttl,
+            )
+
+    approval = asyncio_run(_run())
+    console.print(
+        f"[green]approval token minted[/green]\n"
+        f"  id={approval.id}\n"
+        f"  action={approval.action}\n"
+        f"  actor={approval.actor}\n"
+        f"  expires_at={approval.expires_at.isoformat()}\n"
+        f"  token={approval.token}\n"
+        f"  [yellow]Use this token once. It is consumed on use and cannot be replayed.[/yellow]"
+    )
 
 
 @logs_app.command("tail")

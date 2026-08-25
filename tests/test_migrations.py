@@ -11,7 +11,7 @@ from mavr.storage.database import Database, apply_migrations
 @pytest.mark.asyncio
 async def test_apply_initial(db: Database) -> None:
     touched = await apply_migrations(db, "up")
-    assert touched == [1, 2, 3, 4]
+    assert touched == [1, 2, 3, 4, 5]
     async with db.acquire() as conn:
         cur = await conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
@@ -19,16 +19,23 @@ async def test_apply_initial(db: Database) -> None:
         rows = [r["name"] for r in await cur.fetchall()]
     expected = {
         "agents",
+        "approvals",
         "audit_events",
+        "benchmark_results",
+        "benchmark_runs",
         "campaigns",
+        "circuit_breakers",
+        "dead_letter",
         "evidence_items",
         "extracted_sources",
         "final_reports",
         "finding_leases",
+        "finding_review_summaries",
         "finding_transitions",
         "finding_versions",
         "findings",
         "kill_switch",
+        "model_scores",
         "models",
         "pocs",
         "providers",
@@ -38,6 +45,7 @@ async def test_apply_initial(db: Database) -> None:
         "scope_policies",
         "schema_migrations",
         "search_results",
+        "submission_manifests",
         "task_attempts",
         "task_dependencies",
         "tasks",
@@ -171,14 +179,14 @@ async def test_finding_version_unique(db: Database) -> None:
 async def test_revert_then_reapply(db: Database) -> None:
     await apply_migrations(db, "up")
     touched = await apply_migrations(db, "down")
-    assert touched == [4, 3, 2, 1]
+    assert touched == [5, 4, 3, 2, 1]
     async with db.acquire() as conn:
         cur = await conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='campaigns'"
         )
         assert (await cur.fetchone()) is None
     touched = await apply_migrations(db, "up")
-    assert touched == [1, 2, 3, 4]
+    assert touched == [1, 2, 3, 4, 5]
     async with db.acquire() as conn:
         cur = await conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='campaigns'"
