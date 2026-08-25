@@ -11,7 +11,7 @@ from mavr.storage.database import Database, apply_migrations
 @pytest.mark.asyncio
 async def test_apply_initial(db: Database) -> None:
     touched = await apply_migrations(db, "up")
-    assert touched == [1, 2, 3]
+    assert touched == [1, 2, 3, 4]
     async with db.acquire() as conn:
         cur = await conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
@@ -171,14 +171,14 @@ async def test_finding_version_unique(db: Database) -> None:
 async def test_revert_then_reapply(db: Database) -> None:
     await apply_migrations(db, "up")
     touched = await apply_migrations(db, "down")
-    assert touched == [3, 2, 1]
+    assert touched == [4, 3, 2, 1]
     async with db.acquire() as conn:
         cur = await conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='campaigns'"
         )
         assert (await cur.fetchone()) is None
     touched = await apply_migrations(db, "up")
-    assert touched == [1, 2, 3]
+    assert touched == [1, 2, 3, 4]
     async with db.acquire() as conn:
         cur = await conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='campaigns'"
