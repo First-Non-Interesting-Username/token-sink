@@ -20,6 +20,9 @@ markers = [
     "integration: end-to-end tests across subsystems",
     "safety: security guardrail tests (must never be skipped in CI)",
 ]
+# Top-level packages are the import root (see docs/repo-layout.md) — put the
+# repo root on sys.path so `from policy...` works without installing.
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100
