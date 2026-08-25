@@ -1,0 +1,12 @@
+[project]
+name = "token-sink"
+version = "0.0.0"
+description = "Multi-agent security vulnerability research system (planning stage)"
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
