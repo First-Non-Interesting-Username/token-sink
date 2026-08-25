@@ -14,3 +14,4 @@ data/
 # placed inline regardless (see AGENTS.md).
 config.yaml
 config.toml
+uv.lock
