@@ -1,0 +1,59 @@
+# MAVR default configuration
+# This file documents every config section. Phase 2 wires this into
+# pydantic-settings; the values here are placeholders.
+
+server:
+  host: "127.0.0.1"
+  port: 8765
+  allow_lan: false
+  bearer_token_env: "MAVR_BEARER_TOKEN"
+
+storage:
+  db_path: "~/.local/share/mavr/mavr.db"
+  artifact_dir: "~/.local/share/mavr/artifacts"
+
+providers:
+  free_only: true
+  allowlists: {}
+
+routers:
+  count: 4
+  concurrency: 8
+
+agent_budgets:
+  per_agent:
+    max_tokens: 200000
+    max_time_seconds: 1800
+    max_tool_calls: 500
+    max_network_requests: 200
+
+search:
+  top_n: 10
+  safe_search: "moderate"
+  max_bytes: 5000000
+  max_redirects: 5
+  request_timeout_seconds: 20
+
+campaign_defaults:
+  duration_hours: 24
+  require_human_approval_for_active_testing: true
+  require_human_approval_for_submission: true
+
+scope_policy:
+  default_allow_private_networks: false
+  default_allow_metadata_services: false
+  require_explicit_targets: true
+
+review:
+  quorum: "all_accept_or_3_of_4_no_blockers"
+  reviewer_count: 4
+  mode: "independent_first"
+
+retention:
+  audit_log_days: 0  # 0 = forever
+  artifact_days: 365
+
+logging:
+  level: "INFO"
+  json: true
+  correlation_id_fields: ["campaign_id", "agent_id", "task_id", "finding_id"]
