@@ -70,8 +70,17 @@ def test_load_returns_independent_copies():
 
 
 def test_finding_fixture_shape():
-    required = {"id", "category", "title", "severity", "target", "vulnerability_class",
-                "description", "ground_truth", "evidence"}
+    required = {
+        "id",
+        "category",
+        "title",
+        "severity",
+        "target",
+        "vulnerability_class",
+        "description",
+        "ground_truth",
+        "evidence",
+    }
     for f in load_all():
         if f["category"] == "adversarial_provider_response":
             continue  # different record type
@@ -87,9 +96,7 @@ def test_evidence_items_have_hashes_and_status():
     for f in load_all():
         for ev in f.get("evidence", []):
             # Synthetic placeholder hashes: 64 hex chars + a category tag.
-            assert re.match(r"^[0-9a-f]{56,}[a-z0-9]{1,8}$", ev["sha256"]), (
-                f"{f['id']}: bad sha256"
-            )
+            assert re.match(r"^[0-9a-f]{56,}[a-z0-9]{1,8}$", ev["sha256"]), f"{f['id']}: bad sha256"
             assert len(ev["sha256"]) == 64
             # Content-addressing per PLAN §12: identity comes from hash+status,
             # never from filenames alone.
@@ -147,16 +154,17 @@ def test_adversarial_json_payloads_are_actually_malformed_or_suspicious():
 def test_no_real_targets_or_secret_shapes(path):
     text = path.read_text(encoding="utf-8")
     hostnames = set(
-        h for h in re.findall(r"(?:https?://)?([a-z0-9.-]+\.[a-z]{2,})", text)
+        h
+        for h in re.findall(r"(?:https?://)?([a-z0-9.-]+\.[a-z]{2,})", text)
         if "." in h and not h.endswith((".js", ".json", ".py"))  # skip filenames
     )
     for host in hostnames:
         assert host.endswith(ALLOWED_HOST_SUFFIXES), f"{path.name}: non-reserved host {host}"
     secret_patterns = [
-        r"sk-[A-Za-z0-9]{20,}",          # OpenAI-style keys
-        r"gh[pousr]_[A-Za-z0-9]{30,}",   # GitHub tokens
-        r"AKIA[0-9A-Z]{16}",             # AWS access keys
-        r"xox[bpars]-[A-Za-z0-9-]{10,}", # Slack tokens
+        r"sk-[A-Za-z0-9]{20,}",  # OpenAI-style keys
+        r"gh[pousr]_[A-Za-z0-9]{30,}",  # GitHub tokens
+        r"AKIA[0-9A-Z]{16}",  # AWS access keys
+        r"xox[bpars]-[A-Za-z0-9-]{10,}",  # Slack tokens
     ]
     for pat in secret_patterns:
         assert not re.search(pat, text), f"{path.name}: secret-shaped string matched"
