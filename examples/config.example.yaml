@@ -1,0 +1,58 @@
+# tokensink example configuration (PLAN.md §16)
+# Copy to tokensink.yaml and adjust. Every key is optional; defaults shown.
+
+server:
+  host: 127.0.0.1
+  port: 8080
+
+storage:
+  db_path: data/tokensink.db
+  artifact_path: data/artifacts
+
+providers:
+  # Only these gateways/models may be used (allowlists).
+  allowlist: [openrouter]
+  model_allowlist: []
+  # Refuse any model that costs money when true.
+  free_only: true
+  # Credentials are ENV VAR NAMES, never literal values (PLAN §15).
+  credentials:
+    openrouter: OPENROUTER_API_KEY
+
+router:
+  count: 2
+  concurrency_per_router: 4
+
+agents:
+  budget_usd: 10.0
+  request_timeout_s: 120
+  heartbeat_interval_s: 30
+
+search:
+  engine: ddgs        # ddgs | curl | jina
+  cache_ttl_s: 3600
+  max_results: 10
+  timeout_s: 30
+
+campaign_defaults:
+  max_findings: 100
+
+scope_policy:
+  # Enabling active testing is an explicit operator decision (PLAN §15).
+  active_testing_allowed: false
+  allowed_actions: [recon, passive]
+  prohibited_actions: [exploit, dos, credential_stuffing]
+  rate_limit_requests_per_min: 60
+
+review:
+  quorum: 2
+  require_independent_reviewers: true
+
+retention:
+  days: 365
+  redact_secrets_in_logs: true
+
+logging:
+  level: INFO
+  file_path: data/tokensink.log
+  telemetry_enabled: false   # telemetry stays off by default; local-first

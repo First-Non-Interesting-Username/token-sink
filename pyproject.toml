@@ -3,6 +3,9 @@ name = "token-sink"
 version = "0.0.0"
 description = "Multi-agent security vulnerability research system (see PLAN.md)"
 requires-python = ">=3.11"
+dependencies = [
+    "pyyaml>=6.0",
+]
 
 [dependency-groups]
 dev = [
