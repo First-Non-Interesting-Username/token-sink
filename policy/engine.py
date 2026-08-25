@@ -99,6 +99,28 @@ class PolicyEngine:
         self.scope = scope
         self._scope_status = assess_scope(scope)
         self._ssrf = ssrf_guard or SSRFGuard()
+        # Canonical rule set derived from the scope's TargetSpecs (#134):
+        # subdomain inclusion defaults to opt-in False; the raw matcher in
+        # step 7 keeps its legacy behavior, this one is authoritative.
+        from policy.matching import ScopeRuleSet, spec_to_rule
+
+        in_rules = (
+            [
+                spec_to_rule(t, rule_id=f"in[{i}]", include_subdomains=True)
+                for i, t in enumerate(scope.in_scope)
+            ]
+            if scope
+            else []
+        )
+        out_rules = (
+            [
+                spec_to_rule(t, rule_id=f"out[{i}]", out=True, include_subdomains=True)
+                for i, t in enumerate(scope.out_of_scope)
+            ]
+            if scope
+            else []
+        )
+        self._rule_set = ScopeRuleSet(in_scope=in_rules, out_of_scope=out_rules)
         # Shared limiter (issue #80): enforced here as a pre-dispatch gate so
         # anything going through policy cannot bypass rate limits, even when a
         # caller skips the router. Callers may inject one shared instance so
@@ -243,7 +265,8 @@ class PolicyEngine:
             if classification == "out":
                 return self._block(
                     request,
-                    "target is explicitly out of scope",
+                    f"target is explicitly out of scope (matched rule: "
+                    f"{getattr(match, 'value', '')!r})",
                     ["target_out_of_scope"],
                 )
             if classification == "unlisted":
@@ -262,6 +285,32 @@ class PolicyEngine:
                         f"SSRF protection: {verdict.reason}",
                         ["ssrf_blocked"],
                     )
+
+        # 8. Canonicalized rule-based re-check (#134): the legacy matcher
+        # above compares raw strings; this pass normalizes IDN/punycode,
+        # trailing dots, case and ports before matching. A decision here is
+        # authoritative — it catches lookalike bypasses the raw comparison
+        # misses. Out-of-scope wins; unlisted stays default-deny.
+        if request.target and (self._rule_set.in_scope or self._rule_set.out_of_scope):
+            result = self._rule_set.classify(request.target)
+            if result.classification == "out":
+                return self._block(
+                    request,
+                    f"target out of scope per canonical matching "
+                    f"[{result.rule_id or 'no-rule'}: {result.reason}; "
+                    f"evaluated {result.evaluated_field}]",
+                    ["target_out_of_scope"],
+                )
+            if (
+                result.classification == "unlisted"
+                and self.scope is not None
+                and self.scope.in_scope
+            ):
+                return self._block(
+                    request,
+                    "canonical target form matches no in-scope rule (default-deny)",
+                    ["target_unlisted"],
+                )
 
         # 8. Rate-limit gate LAST among checks: it consumes budget, so only
         # spend a slot on requests that already passed every safety/policy

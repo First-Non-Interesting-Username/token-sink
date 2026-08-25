@@ -1,54 +1,23 @@
-# Policy & Safety Layer
 
-Implementation of PLAN §2.1, §5 and §15 enforcement: scope enforcement,
-tool-call gating, and SSRF protections. Enforcement lives in this code —
-never as prompt discouragement.
+## Matcher semantics (#134)
 
-## Layout
+`policy/matching.py` defines the canonical matching layer used by the engine
+as an authoritative re-check after the legacy raw-string classification:
 
-| Module | Responsibility |
-|---|---|
-| `policy/scope.py` | `ScopePolicy` / `TargetSpec` — campaign scope surface + target matching |
-| `policy/ssrf.py` | `SSRFGuard` — private/metadata-address blocking with DNS resolution checks |
-| `policy/engine.py` | `PolicyEngine` — evaluates every `ToolCallRequest` before execution |
-
-## Design decisions
-
-- **Default-deny targets.** Anything not explicitly in-scope is denied
-  (`target_unlisted`). Explicit `out_of_scope` entries always win over
-  in-scope matches so an admin can carve one host out of a wildcard.
-- **Missing/ambiguous scope is a state, not an error.** `assess_scope()`
-  returns DEFINED / AMBIGUOUS / MISSING; the engine refuses everything while
-  scope is not DEFINED (§5: agents refuse or pause, never guess).
-- **Hard-prohibited actions** (`denial_of_service`, `destructive_mutation`,
-  `spam`, `credential_attacks`, `data_exfiltration`) are enforced regardless
-  of what a campaign config says — they cannot be configured away.
-- **Shell is disabled by default** (§15): it requires the explicit `shell`
-  test class grant.
-- **Evaluation order matters:** scope classification runs before the SSRF
-  guard so an out-of-scope request gets the more actionable explanation;
-  the SSRF layer then applies even to in-scope hosts, because a misconfigured
-  or injected "in-scope" private address must still fail closed.
-- **SSRF check resolves DNS** and treats any answer resolving into
-  private/loopback/link-local/metadata space as blocked (fail closed on
-  rebinding-style behavior). Literal IPs are checked without DNS. The only
-  bypass is `private_network_authorized=True`, which must be set from
-  explicit human configuration — never from agent/model input.
-- **Blocked events carry IDs.** Every denial records a `BlockedAction` keyed
-  by UUID for observability (#23) and the audit log (#15).
-- **Injectable SSRF resolver** keeps tests hermetic (no real network).
-
-## Rate limits
-
-`ScopePolicy.rate_limits` carries per-target `RateLimit(max_requests,
-per_seconds)` data. Enforcement belongs to the executor/runtime that paces
-requests (see PLAN §5); the engine validates scope/method/class/action and
-exposes the limits for that layer to consume.
-
-## Tests
-
-- `tests/unit/test_policy_engine.py` — scope matching, gating rules
-- `tests/unit/test_ssrf_guard.py` — resolution matrix (loopback, RFC1918,
-  link-local/metadata, IPv6 ULA, rebinding, schemes, credentials)
-- `tests/safety/test_policy_safety.py` — §19.3 guardrails, marked `safety`
-  (never skipped in CI)
+- **Canonicalization before comparison**: IDN → punycode (IDNA), lower-case,
+  trailing root dot stripped, default ports (80/443) removed. Closes
+  lookalike bypasses like `exämple.com`, `EXAMPLE.com.`, `example.com:443`.
+- **Subdomain inclusion is opt-in** per rule (`include_subdomains`) with a
+  real label boundary — `evilexample.com` can never match `example.com`.
+  The engine currently derives rules with subdomain inclusion enabled to
+  match the legacy matcher's behavior; rule-level opt-in exists for stricter
+  campaign configs.
+- **Path modes for URL rules**: `segment` (default) never lets `/api` match
+  `/api-v2`; `prefix` does.
+- **Out-of-scope always wins**, unlisted is default-deny.
+- **Structured decisions**: every match returns rule ID, reason, and the
+  request field evaluated; these surface in blocked-event explanations.
+- The matcher is a pure function over (rule set, target) — reusable by CLI
+  pre-flight checks and trivially fuzz-tested
+  (`tests/unit/test_scope_matching.py` includes randomized-host property
+  tests asserting no bypass form of an out-of-scope host matches in-scope).
