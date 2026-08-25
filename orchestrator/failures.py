@@ -21,6 +21,7 @@ Design rules (from §18):
 from __future__ import annotations
 
 import enum
+import random
 import time
 import uuid
 from collections.abc import Callable
@@ -51,6 +52,7 @@ class FailureClass(enum.Enum):
     # --- safety-critical: quarantine + human intervention only ------------
     POC_SAFETY_FAILURE = "poc_safety_failure"  # hard stop, approval gate required
     STALE_LEASE = "stale_lease"  # reassignment via lease manager
+    MODEL_QUALITY = "model_quality"  # wrong-but-valid output; negative score signal
 
 
 # Classes where retrying is permitted at all. Everything else goes straight to
@@ -83,6 +85,9 @@ RECOVERY_PATHS: dict[FailureClass, str] = {
     FailureClass.CONFLICTING_EDITS: "versioned_merge_resolution",
     FailureClass.POC_SAFETY_FAILURE: "quarantine_human_approval",
     FailureClass.STALE_LEASE: "lease_reassignment",
+    # Not retried on the same model — the score system (#17) consumes it as a
+    # negative signal and the router may pick a different model instead.
+    FailureClass.MODEL_QUALITY: "negative_score_signal_then_reroute",
 }
 
 
@@ -99,10 +104,24 @@ class RetryPolicy:
     max_delay_s: float
     jitter: bool = True
 
-    def delay_for(self, attempt: int) -> float:
-        """Exponential backoff delay before ``attempt`` (1-based) re-execution."""
+    def delay_for(self, attempt: int, rng: Callable[[], float] | None = None) -> float:
+        """Exponential backoff delay before ``attempt`` (1-based) re-execution.
+
+        When ``jitter`` is set the delay is scaled by a random factor in
+        [0.5, 1.0) (decorrelated-ish jitter) so concurrent retriers do not
+        synchronize. ``rng`` is injectable for deterministic tests.
+        """
         delay = self.base_delay_s * (2 ** (attempt - 1))
-        return min(delay, self.max_delay_s)
+        delay = min(delay, self.max_delay_s)
+        if self.jitter and delay > 0:
+            r = rng if rng is not None else _default_rng.random
+            delay *= 0.5 + r() * 0.5  # uniform in [0.5, 1.0)
+        return delay
+
+
+# Module-level so tests can monkeypatch deterministically without touching
+# instances; random.random is only consulted when jitter is enabled.
+_default_rng = random.Random()
 
 
 DEFAULT_RETRY_POLICIES: dict[FailureClass, RetryPolicy] = {
@@ -116,26 +135,58 @@ DEFAULT_RETRY_POLICIES: dict[FailureClass, RetryPolicy] = {
 }
 
 
-def classify(exc: BaseException) -> FailureClass:
-    """Map a provider/agent exception to a §18 failure class.
+def classify(
+    exc: BaseException,
+    *,
+    rules: list[tuple[str, FailureClass]] | None = None,
+) -> FailureClass:
+    """Map a provider/agent exception to a failure class.
 
-    Uses well-known exception type names so subsystems can raise plain builtins
-    without importing this module (keeps the failure layer dependency-free).
+    Two-stage classification per §8.1/§6:
+
+    1. **Data-driven rules** (optional): provider adapters contribute
+       ``(pattern, FailureClass)`` pairs — matched against the exception type
+       name and message, case-insensitively, in order. This is how an adapter
+       teaches the classifier about vendor-specific errors without this module
+       importing the adapter.
+    2. **Built-in type-name heuristics**: well-known names so subsystems can
+       raise plain builtins without importing this module.
+
+    Unknown exceptions default to a non-transient class so we never burn
+    retries on something we do not understand (§18 rule). A wrong-but-well-
+    formed answer from a model (detected by callers via validation of *valid*
+    output against expectations) should be raised as ``ModelQualityError`` —
+    it routes to the score system as a negative signal instead of a retry.
     """
-    name = type(exc).__name__.lower()
-    if "timeout" in name:
+    haystack = " ".join((type(exc).__name__.lower(), str(exc).lower()))
+
+    for pattern, failure_class in rules or []:
+        if pattern.lower() in haystack:
+            return failure_class
+
+    if "modelquality" in haystack.replace("_", ""):
+        return FailureClass.MODEL_QUALITY
+    if "timeout" in haystack:
         return FailureClass.AGENT_TIMEOUT
-    if "ratelimit" in name.replace("_", "") or "toomanyrequests" in name:
+    if "ratelimit" in haystack.replace("_", "") or "toomanyrequests" in haystack:
         return FailureClass.PROVIDER_RATE_LIMIT
-    if "quota" in name:
+    if "quota" in haystack:
         return FailureClass.QUOTA_EXHAUSTED
-    if "json" in name or "schema" in name or "malformed" in name:
+    if "json" in haystack or "schema" in haystack or "malformed" in haystack:
         return FailureClass.MALFORMED_OUTPUT
-    if "connection" in name or "unavailable" in name or isinstance(exc, OSError):
+    if "connection" in haystack or "unavailable" in haystack or isinstance(exc, OSError):
         return FailureClass.PROVIDER_OUTAGE
-    # Unknown exceptions default to the conservative non-transient class so we
-    # never burn retries on something we do not understand (§18 rule).
+    # Conservative default: non-transient, dead-letter with diagnosis payload.
     return FailureClass.MALFORMED_OUTPUT
+
+
+class ModelQualityError(Exception):
+    """A model returned schema-valid output that is substantively wrong.
+
+    Raising this (rather than returning the bad value) lets :func:`classify`
+    route it to ``MODEL_QUALITY``: no same-model retry, but a negative signal
+    to the score system (#17) and optional reroute to a different model.
+    """
 
 
 @dataclass
@@ -223,3 +274,70 @@ class DeadLetterQueue:
 
     def __len__(self) -> int:
         return len(self._items)
+
+
+class RetryBudget:
+    """Per-task and per-campaign retry budgets to prevent retry loops (§18).
+
+    Every retry attempt must consume budget from BOTH scopes: a task that
+    keeps failing stops burning campaign-wide attempts, and one noisy task
+    cannot starve the rest of the campaign. When either budget is exhausted
+    the caller escalates to the dead-letter path instead of retrying.
+
+    Budgets are plain counters — the durable backing store belongs to the
+    storage layer (#7); this class defines the contract.
+    """
+
+    def __init__(
+        self,
+        *,
+        task_retries: int = 3,
+        campaign_retries: int = 50,
+        campaigns: dict[str, int] | None = None,
+    ) -> None:
+        self.task_retries = task_retries
+        # Per-campaign caps are configurable; "default" covers campaigns with
+        # no explicit entry so they still get a sane cap instead of unbounded.
+        self.campaign_budgets = {"default": campaign_retries, **(campaigns or {})}
+        self.task_spent: dict[str, int] = {}
+        self.campaign_spent: dict[str, int] = {}
+
+    def can_retry(self, task_id: str, campaign_id: str = "default") -> bool:
+        """True if both the task and its campaign have remaining budget."""
+        return self.task_spent.get(task_id, 0) < self.task_retries and self.campaign_spent.get(
+            campaign_id, 0
+        ) < self.campaign_budgets.get(campaign_id, 0)
+
+    def spend(self, task_id: str, campaign_id: str = "default") -> None:
+        """Consume one unit of retry budget for this attempt."""
+        self.task_spent[task_id] = self.task_spent.get(task_id, 0) + 1
+        self.campaign_spent[campaign_id] = self.campaign_spent.get(campaign_id, 0) + 1
+
+
+class FailureLogger:
+    """Observability hook recording every classification and retry decision.
+
+    Keeps (task, class, decision, reason) tuples so the audit log (§14/§15)
+    can answer "why did this task get retried / dead-lettered". The in-memory
+    list is the interface; durable storage goes through observability (#14).
+    """
+
+    def __init__(self) -> None:
+        self.entries: list[dict[str, Any]] = []
+
+    def log(
+        self,
+        task_id: str,
+        failure_class: FailureClass,
+        decision: str,
+        reason: str,
+    ) -> None:
+        self.entries.append(
+            {
+                "task_id": task_id,
+                "failure_class": failure_class.value,
+                "decision": decision,
+                "reason": reason,
+                "ts": time.time(),
+            }
+        )

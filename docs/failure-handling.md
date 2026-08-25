@@ -46,3 +46,21 @@ transient classes listed below — everything else has a terminal path.
 
 Related: PLAN §7 (router cooldowns/circuit breakers), §12 (atomic
 transitions), §18 (this matrix), issue #25.
+
+## Retry budgets and classification decisions (issue #91)
+
+- `RetryBudget` enforces per-task **and** per-campaign retry caps. Every retry
+  attempt consumes both; when either is exhausted the item goes to the
+  dead-letter path. Budgets are counters here — durable backing belongs to
+  the storage layer (#7).
+- `classify(exc, rules=...)` accepts data-driven rules from provider adapters
+  (§8.1): `(pattern, FailureClass)` pairs matched against type name + message
+  before the built-in heuristics. Unknown errors still default to
+  non-transient — no blind retries.
+- `MODEL_QUALITY` (raise `ModelQualityError` for schema-valid-but-wrong
+  output) never retries on the same model; its recovery path feeds a negative
+  signal to the score system (#17) and allows rerouting to another model.
+- Backoff delays now carry jitter (uniform factor in [0.5, 1.0)) so concurrent
+  retriers do not synchronize; inject `rng=` in tests for determinism.
+- `FailureLogger` records every classification and retry decision with its
+  reason for the audit trail (§14/§15).

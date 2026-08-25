@@ -108,7 +108,7 @@ def test_non_transient_class_never_retries():
 
 
 def test_rate_limit_backoff_grows_and_caps():
-    pol = RetryPolicy(max_attempts=10, base_delay_s=2.0, max_delay_s=60.0)
+    pol = RetryPolicy(max_attempts=10, base_delay_s=2.0, max_delay_s=60.0, jitter=False)
     delays = [pol.delay_for(a) for a in range(1, 8)]
     assert delays[0] == 2.0
     assert delays[1] == 4.0
