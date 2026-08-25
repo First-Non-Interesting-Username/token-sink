@@ -64,5 +64,6 @@ safety principles apply to how agents work on the code too:
 - The tool must only ever operate against explicitly authorized, in-scope
   targets. Never weaken scope checks, approval gates, or policy blocks to make
   a test or feature easier.
-- Do not commit credentials, API keys, or tokens — including example files
-  with real-looking secrets.
+- Do not commit real credentials, API keys, or tokens. Example/placeholder
+  files with fake values (e.g. `sk-example-...`, `changeme`) are fine and
+  encouraged for docs; just never use a live secret value.
