@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Runtime data (DB + evidence artifacts) — never commit campaign data
+data/
+
+# Local configs may contain environment-specific paths; secrets must NEVER be
+# placed inline regardless (see AGENTS.md).
+config.yaml
+config.toml

@@ -1,0 +1,50 @@
+# Example token-sink configuration (PLAN.md §16).
+# Copy to config.yaml and adjust. Credential references point at environment
+# variable names or secret-file paths — NEVER put a real secret value inline.
+
+server:
+  host: "127.0.0.1"   # bind address; keep loopback unless you know you need otherwise
+  port: 8080          # 1-65535
+
+storage:
+  db_path: "data/token_sink.db"        # transactional metadata DB
+  artifact_path: "data/artifacts"      # evidence/artifact files
+
+providers:
+  credential_refs:
+    openrouter: "OPENROUTER_API_KEY"   # reference, not the value
+  allowlist:                           # optional provider names; empty = all
+    - openrouter
+  model_allowlist: []                  # optional model names; empty = all
+  free_only_mode: true                 # gateways only usable via free-model filter
+
+routers:
+  count: 2            # independent router workers
+  concurrency: 4      # parallel decisions per router
+
+agents:
+  budget_tokens: 200000
+  timeout_seconds: 600
+
+search:
+  enabled: true
+  cache_ttl_seconds: 86400
+  extraction_backend: curl   # curl | jina
+
+campaign_defaults:
+  max_duration_hours: 24
+
+policy:
+  scope_enforcement: true       # never disable to make testing easier
+  allow_active_testing: false   # must be opted in explicitly
+
+review:
+  quorum: 2           # reviewers required per finding; must be <= routers.count
+
+retention:
+  days: null          # null = keep forever
+
+logging:
+  level: INFO                  # DEBUG|INFO|WARNING|ERROR|CRITICAL
+  redact_prompts: true         # redact prompt/response bodies from logs
+  telemetry_enabled: false     # no external telemetry by default

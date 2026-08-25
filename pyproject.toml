@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "token-sink"
+version = "0.0.1"
+description = "Multi-agent security vulnerability research orchestrator (see PLAN.md)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+# Dependencies kept minimal per issue #5: PyYAML for config, pytest only for dev.
+dependencies = [
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+token-sink = "cli.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "cli", "api", "ui", "orchestrator", "routers",
+    "agents", "providers", "search", "policy",
+    "findings", "storage", "observability",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
