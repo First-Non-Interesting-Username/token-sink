@@ -20,6 +20,8 @@ acceptance criteria) and its phased roadmap.
 ## Documentation
 
 - [docs/architecture.md](docs/architecture.md) — architecture overview.
+- [docs/install.md](docs/install.md) — install, upgrade, and packaging
+  (PyPI wheel; DB migration story).
 - [docs/operator-guide.md](docs/operator-guide.md) — install, configure, run
   campaigns safely, approvals & kill switch.
 - [docs/safety-and-scope.md](docs/safety-and-scope.md) — writing campaign

@@ -1,0 +1,50 @@
+name: Package
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "pyproject.toml"
+      - "uv.lock"
+      - "cli/**"
+      - ".github/workflows/package.yml"
+  push:
+    branches: [main]
+    paths:
+      - "pyproject.toml"
+      - "uv.lock"
+      - "cli/**"
+      - ".github/workflows/package.yml"
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      # Build with uv (already pinned in uv.lock), then install the wheel
+      # into a FRESH venv without dev tools — this is exactly what an end
+      # user's environment looks like.
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: uv build
+      - name: Smoke-test clean install + launch
+        run: |
+          uv venv /tmp/smoke-venv
+          uv pip install --python /tmp/smoke-venv/bin/python dist/token_sink-*.whl
+          /tmp/smoke-venv/bin/python -c "
+          import agents, api, cli, config, findings, observability, orchestrator, \
+              policy, providers, routers, schemas, search, storage, ui
+          print('all subsystem packages import OK')
+          "
+          /tmp/smoke-venv/bin/token-sink doctor
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.python-version }}
+          path: dist/*.whl
