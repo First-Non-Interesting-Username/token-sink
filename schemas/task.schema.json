@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/task.schema.json",
+  "title": "Task",
+  "description": "Unit of orchestrator work with dependencies, retries, lease and budget accounting.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record_type",
+    "task_uuid",
+    "campaign_uuid",
+    "kind",
+    "status",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "task"
+    },
+    "task_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "campaign_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "parent_task_uuid": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "finding_uuid": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string",
+      "description": "Task type, e.g. search, extract, review, poc."
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "ready",
+        "claimed",
+        "running",
+        "succeeded",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "depends_on_task_uuids": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/uuid"
+      }
+    },
+    "assigned_agent_uuid": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "lease": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/lease_info"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1
+    },
+    "max_attempts": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "input": {
+      "type": "object"
+    },
+    "output_summary": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "error": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "budget": {
+      "type": "object",
+      "properties": {
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_tokens": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "updated_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/common.schema.json",
+  "title": "Common definitions",
+  "description": "Shared $defs reused by all token-sink record schemas. This file defines no top-level record and is referenced by the others.",
+  "$defs": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Version of this record's schema; bump when the shape changes incompatibly."
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "RFC 4122 UUID, lowercase canonical form."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 timestamp, UTC."
+    },
+    "sha256_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Lowercase hex SHA-256 digest."
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["info", "low", "medium", "high", "critical"]
+    },
+    "target_ref": {
+      "type": "object",
+      "description": "Reference to an in-scope target (domain, URL, repo, package, API path).",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["domain", "url", "repository", "package", "api", "application", "local_fixture"]
+        },
+        "identifier": { "type": "string", "minLength": 1 }
+      },
+      "required": ["kind", "identifier"],
+      "additionalProperties": false
+    },
+    "agent_provenance": {
+      "type": "object",
+      "description": "Which agent/model produced this record.",
+      "properties": {
+        "agent_uuid": { "$ref": "#/$defs/uuid" },
+        "role": { "type": "string", "minLength": 1 },
+        "model_id": { "type": ["string", "null"] },
+        "provider_id": { "type": ["string", "null"] }
+      },
+      "required": ["agent_uuid"],
+      "additionalProperties": false
+    },
+    "lease_info": {
+      "type": "object",
+      "description": "Lease held on a record while an agent works on it.",
+      "properties": {
+        "holder_agent_uuid": { "$ref": "#/$defs/uuid" },
+        "acquired_at": { "$ref": "#/$defs/timestamp" },
+        "expires_at": { "$ref": "#/$defs/timestamp" },
+        "renewal_count": { "type": "integer", "minimum": 0, "default": 0 }
+      },
+      "required": ["holder_agent_uuid", "acquired_at", "expires_at"],
+      "additionalProperties": false
+    },
+    "redaction_status": {
+      "type": "object",
+      "description": "Whether secrets/personal data were redacted from this record and by what rule set version.",
+      "properties": {
+        "redacted": { "type": "boolean" },
+        "ruleset_version": { "type": "string" },
+        "checked_at": { "$ref": "#/$defs/timestamp" }
+      },
+      "required": ["redacted"],
+      "additionalProperties": false
+    }
+  }
+}

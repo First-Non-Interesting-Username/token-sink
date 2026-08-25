@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/usage_event.schema.json",
+  "title": "Usage event",
+  "description": "Token/cost accounting event attributed per provider/model/agent/task (PLAN \u00a713.5).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record_type",
+    "event_uuid",
+    "campaign_uuid",
+    "agent_uuid",
+    "provider_id",
+    "model_id",
+    "input_tokens",
+    "output_tokens",
+    "is_free_tier",
+    "request_status",
+    "occurred_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "usage_event"
+    },
+    "event_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "campaign_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "task_uuid": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "agent_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "provider_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "input_tokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "output_tokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "cache_read_tokens": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "cache_write_tokens": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "is_free_tier": {
+      "type": "boolean",
+      "description": "Free-tier usage must be separable from paid usage."
+    },
+    "estimated_cost_usd": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "latency_ms": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "request_status": {
+      "enum": [
+        "success",
+        "error",
+        "timeout",
+        "rate_limited"
+      ]
+    },
+    "occurred_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    }
+  },
+  "additionalProperties": false
+}

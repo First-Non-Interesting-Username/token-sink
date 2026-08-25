@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/evidence_item.schema.json",
+  "title": "Evidence item",
+  "description": "Immutable evidence artifact referenced by findings and reviews.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record_type",
+    "evidence_uuid",
+    "campaign_uuid",
+    "kind",
+    "claim_type",
+    "artifact_ref",
+    "content_hash",
+    "provenance",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "evidence_item"
+    },
+    "evidence_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "campaign_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "kind": {
+      "enum": [
+        "observation",
+        "http_exchange",
+        "file_diff",
+        "log_excerpt",
+        "screenshot",
+        "poc_output",
+        "search_snapshot",
+        "extracted_content"
+      ]
+    },
+    "claim_type": {
+      "enum": [
+        "source_fact",
+        "agent_inference",
+        "unverified_claim",
+        "requires_active_confirmation"
+      ],
+      "description": "PLAN \u00a79: findings must distinguish these evidence classes."
+    },
+    "artifact_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "content_hash": {
+      "$ref": "common.schema.json#/$defs/sha256_hash"
+    },
+    "provenance": {
+      "$ref": "common.schema.json#/$defs/agent_provenance"
+    },
+    "source_url": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uri"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/audit_event.schema.json",
+  "title": "Audit event",
+  "description": "Append-only audit trail entry. Events are immutable; corrections are new events referencing the old ones.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record_type",
+    "event_id",
+    "actor",
+    "action",
+    "details",
+    "occurred_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "audit_event"
+    },
+    "event_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "campaign_uuid": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "actor": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "agent",
+            "human",
+            "system"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "action": {
+      "type": "string",
+      "minLength": 1,
+      "description": "e.g. state_transition, policy_block, approval_granted, record_tombstoned."
+    },
+    "subject_record_type": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "subject_record_uuid": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "policy_result": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "allowed": {
+              "type": "boolean"
+            },
+            "explanation": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "allowed"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "correlation_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "details": {
+      "type": "object"
+    },
+    "prev_event_id": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Chain field for hash-linked append-only log."
+    },
+    "content_hash": {
+      "$ref": "common.schema.json#/$defs/sha256_hash"
+    },
+    "occurred_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    }
+  },
+  "additionalProperties": false
+}

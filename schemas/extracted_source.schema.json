@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/extracted_source.schema.json",
+  "title": "Extracted source",
+  "description": "Page/content extracted via curl or jina.ai, cached with checksum provenance.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record_type",
+    "source_uuid",
+    "campaign_uuid",
+    "url",
+    "extractor",
+    "content_hash",
+    "artifact_ref",
+    "retrieved_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "extracted_source"
+    },
+    "source_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "campaign_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "extractor": {
+      "enum": [
+        "curl",
+        "jina",
+        "manual"
+      ]
+    },
+    "content_hash": {
+      "$ref": "common.schema.json#/$defs/sha256_hash"
+    },
+    "artifact_ref": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Storage-layer artifact reference (never a bare filename as identity)."
+    },
+    "http_status": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "retrieved_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "cache_expires_at": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "content_type": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

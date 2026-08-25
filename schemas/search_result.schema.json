@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/search_result.schema.json",
+  "title": "Search result",
+  "description": "Web search hit via ddgs with retrieval provenance. Not proof without source verification.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record_type",
+    "result_uuid",
+    "campaign_uuid",
+    "query",
+    "url",
+    "retrieved_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "search_result"
+    },
+    "result_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "campaign_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "query": {
+      "type": "string",
+      "minLength": 1
+    },
+    "engine": {
+      "type": "string"
+    },
+    "url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "title": {
+      "type": "string"
+    },
+    "snippet": {
+      "type": "string"
+    },
+    "retrieved_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "verified": {
+      "type": "boolean",
+      "default": false,
+      "description": "True only after source verification by extraction."
+    }
+  },
+  "additionalProperties": false
+}

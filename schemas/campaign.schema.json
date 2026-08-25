@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/campaign.schema.json",
+  "title": "Campaign",
+  "description": "Top-level unit of work: authorization refs, scope policy, budgets, approval requirements (PLAN \u00a75).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record_type",
+    "campaign_uuid",
+    "name",
+    "authorization_reference",
+    "in_scope_targets",
+    "prohibited_actions",
+    "active_testing_enabled",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "campaign"
+    },
+    "campaign_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "authorization_reference": {
+      "type": "string",
+      "description": "Program name / authorization document reference."
+    },
+    "program_name": {
+      "type": "string"
+    },
+    "in_scope_targets": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/target_ref"
+      },
+      "minItems": 1
+    },
+    "out_of_scope_targets": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/target_ref"
+      }
+    },
+    "allowed_http_methods": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "allowed_test_classes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "prohibited_actions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "max_request_rate_per_target": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "max_concurrency_per_target": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "max_duration_seconds": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "token_budget": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "tool_budget": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "active_testing_enabled": {
+      "type": "boolean"
+    },
+    "human_approval_required_for": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "data_handling": {
+      "type": "object"
+    },
+    "retention_settings": {
+      "type": "object"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "updated_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    }
+  },
+  "additionalProperties": false
+}

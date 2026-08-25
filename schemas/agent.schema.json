@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/agent.schema.json",
+  "title": "Agent",
+  "description": "Agent/subagent identity and runtime status (PLAN \u00a76).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record_type",
+    "agent_uuid",
+    "role",
+    "status",
+    "heartbeat_at",
+    "registered_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "agent"
+    },
+    "agent_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "parent_agent_uuid": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "role": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "starting",
+        "idle",
+        "running",
+        "waiting_approval",
+        "blocked",
+        "stopping",
+        "stopped",
+        "crashed"
+      ]
+    },
+    "current_task_uuid": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "model_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "provider_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "lease": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/lease_info"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "heartbeat_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "registered_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "updated_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    }
+  },
+  "additionalProperties": false
+}

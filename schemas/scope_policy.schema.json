@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/scope_policy.schema.json",
+  "title": "Scope policy",
+  "description": "Standalone scope/policy evaluation rules derived from a campaign; every tool call is checked against this before execution.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record_type",
+    "policy_uuid",
+    "campaign_uuid",
+    "in_scope",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "scope_policy"
+    },
+    "policy_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "campaign_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "in_scope": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/target_ref"
+      },
+      "minItems": 1
+    },
+    "out_of_scope": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/target_ref"
+      }
+    },
+    "allowed_http_methods": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "allowed_tools": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "prohibited_actions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "rate_limits": {
+      "type": "object",
+      "description": "Per-target rate limit config."
+    },
+    "requires_human_approval": {
+      "type": "boolean"
+    },
+    "active_testing_enabled": {
+      "type": "boolean"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    }
+  },
+  "additionalProperties": false
+}

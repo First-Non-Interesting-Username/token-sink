@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/poc.schema.json",
+  "title": "Proof of concept",
+  "description": "Smallest safe deterministic reproduction (PLAN \u00a710.4). Scoped to approved targets or local fixtures only.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record_type",
+    "poc_uuid",
+    "finding_uuid",
+    "campaign_uuid",
+    "uses_local_fixture",
+    "setup",
+    "commands",
+    "expected_output",
+    "cleanup_steps",
+    "safety_notes",
+    "human_approval_required",
+    "artifact_ref",
+    "content_hash",
+    "redaction_status",
+    "author_provenance",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "poc"
+    },
+    "poc_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "finding_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "campaign_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "target": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/target_ref"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Null when a local fixture is used (preferred)."
+    },
+    "uses_local_fixture": {
+      "type": "boolean"
+    },
+    "setup": {
+      "type": "string"
+    },
+    "commands": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "expected_output": {
+      "type": "string"
+    },
+    "cleanup_steps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "safety_notes": {
+      "type": "string",
+      "minLength": 1
+    },
+    "destructive_actions_involved": {
+      "type": "boolean",
+      "default": false
+    },
+    "human_approval_required": {
+      "type": "boolean"
+    },
+    "human_approved_by": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "approved_at": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "artifact_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "content_hash": {
+      "$ref": "common.schema.json#/$defs/sha256_hash"
+    },
+    "redaction_status": {
+      "$ref": "common.schema.json#/$defs/redaction_status"
+    },
+    "author_provenance": {
+      "$ref": "common.schema.json#/$defs/agent_provenance"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/review.schema.json",
+  "title": "Review",
+  "description": "A review vote on a finding \u2014 first review cycle or four-agent PoC review (PLAN \u00a710.2/\u00a710.5), including dissent.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record_type",
+    "review_uuid",
+    "finding_uuid",
+    "campaign_uuid",
+    "phase",
+    "reviewer_provenance",
+    "conclusion",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "review"
+    },
+    "review_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "finding_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "campaign_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "phase": {
+      "enum": [
+        "first_review",
+        "dispute_review",
+        "poc_review",
+        "final_review"
+      ]
+    },
+    "reviewer_provenance": {
+      "$ref": "common.schema.json#/$defs/agent_provenance"
+    },
+    "conclusion": {
+      "enum": [
+        "confirmed",
+        "likely",
+        "inconclusive",
+        "incorrect"
+      ]
+    },
+    "verdict_fields": {
+      "type": "object",
+      "description": "PoC-review specific verdicts (PLAN \u00a710.5).",
+      "properties": {
+        "validity": {
+          "enum": [
+            "accept",
+            "reject",
+            "abstain"
+          ]
+        },
+        "reproduction_quality": {
+          "enum": [
+            "poor",
+            "adequate",
+            "good",
+            "excellent"
+          ]
+        },
+        "scope_and_safety_ok": {
+          "type": "boolean"
+        },
+        "blocking_safety_issue": {
+          "type": "boolean",
+          "default": false
+        },
+        "severity_consistent": {
+          "type": "boolean"
+        },
+        "missing_evidence": {
+          "type": "string"
+        },
+        "requested_changes": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "is_dissent": {
+      "type": "boolean",
+      "default": false,
+      "description": "True when this review disagrees with the advancing decision."
+    },
+    "blind": {
+      "type": "boolean",
+      "default": true,
+      "description": "True when collected before seeing prior reviews (independent-first mode)."
+    },
+    "confidence": {
+      "$ref": "common.schema.json#/$defs/confidence"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    }
+  },
+  "additionalProperties": false
+}

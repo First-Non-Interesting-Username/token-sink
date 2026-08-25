@@ -1,0 +1,329 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/finding.schema.json",
+  "title": "Finding",
+  "description": "Central versioned record. Every new version appends to transition_history; records are never silently deleted (tombstones only, PLAN \u00a710).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record_type",
+    "finding_uuid",
+    "campaign_uuid",
+    "version",
+    "state",
+    "title",
+    "affected_asset",
+    "location",
+    "observation",
+    "confidence",
+    "transition_reason",
+    "transition_history",
+    "evidence_uuids",
+    "review_uuids",
+    "provenance",
+    "content_hash",
+    "redaction_status",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "finding"
+    },
+    "finding_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "campaign_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "parent_finding_uuid": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "state": {
+      "enum": [
+        "initial_findings",
+        "review_cycle_1",
+        "validated_or_disputed",
+        "impact_analysis",
+        "poc_draft",
+        "poc_review",
+        "polished_report",
+        "final_review",
+        "vulnerabilities",
+        "disputed",
+        "quarantined",
+        "tombstoned"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "category": {
+      "type": "string"
+    },
+    "affected_asset": {
+      "$ref": "common.schema.json#/$defs/target_ref"
+    },
+    "location": {
+      "type": "string",
+      "description": "Exact location within the affected asset."
+    },
+    "observation": {
+      "type": "string"
+    },
+    "hypothesis": {
+      "type": "string"
+    },
+    "reproduction_outline": {
+      "type": "string"
+    },
+    "suspected_impact": {
+      "type": "string"
+    },
+    "confidence": {
+      "$ref": "common.schema.json#/$defs/confidence"
+    },
+    "uncertainty_notes": {
+      "type": "string"
+    },
+    "scope_policy_result": {
+      "type": "object",
+      "properties": {
+        "allowed": {
+          "type": "boolean"
+        },
+        "explanation": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "allowed"
+      ],
+      "additionalProperties": false
+    },
+    "root_cause": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "preconditions": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "affected_versions": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "security_boundary_crossed": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "attacker_capabilities": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "impact_cia": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "confidentiality": {
+              "$ref": "common.schema.json#/$defs/severity"
+            },
+            "integrity": {
+              "$ref": "common.schema.json#/$defs/severity"
+            },
+            "availability": {
+              "$ref": "common.schema.json#/$defs/severity"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "practical_exploitability": {
+      "enum": [
+        null,
+        "none",
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "mitigations": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "evidence_gaps": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "transition_reason": {
+      "type": "string",
+      "description": "Why the record entered its current state."
+    },
+    "transition_history": {
+      "type": "array",
+      "description": "Append-only; entries are added, never edited or removed.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "from_state": {
+            "enum": [
+              "initial_findings",
+              "review_cycle_1",
+              "validated_or_disputed",
+              "impact_analysis",
+              "poc_draft",
+              "poc_review",
+              "polished_report",
+              "final_review",
+              "vulnerabilities",
+              "disputed",
+              "quarantined",
+              "tombstoned",
+              null
+            ]
+          },
+          "to_state": {
+            "enum": [
+              "initial_findings",
+              "review_cycle_1",
+              "validated_or_disputed",
+              "impact_analysis",
+              "poc_draft",
+              "poc_review",
+              "polished_report",
+              "final_review",
+              "vulnerabilities",
+              "disputed",
+              "quarantined",
+              "tombstoned"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "actor_agent_uuid": {
+            "$ref": "common.schema.json#/$defs/uuid"
+          },
+          "at": {
+            "$ref": "common.schema.json#/$defs/timestamp"
+          }
+        },
+        "required": [
+          "to_state",
+          "reason",
+          "actor_agent_uuid",
+          "at"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "owner_agent_uuid": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "lease": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/lease_info"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "evidence_uuids": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/uuid"
+      }
+    },
+    "review_uuids": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/uuid"
+      }
+    },
+    "dissent_summary": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Carried forward when advancing with dissenting opinions attached."
+    },
+    "poc_uuid": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "provenance": {
+      "$ref": "common.schema.json#/$defs/agent_provenance"
+    },
+    "tool_provenance": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "content_hash": {
+      "$ref": "common.schema.json#/$defs/sha256_hash"
+    },
+    "redaction_status": {
+      "$ref": "common.schema.json#/$defs/redaction_status"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "updated_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    }
+  },
+  "additionalProperties": false
+}

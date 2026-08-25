@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/model.schema.json",
+  "title": "Model",
+  "description": "Model entry from a provider's catalog with capability scores and load info.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record_type",
+    "model_id",
+    "provider_id",
+    "is_free",
+    "updated_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "model"
+    },
+    "model_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provider_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "is_free": {
+      "type": "boolean"
+    },
+    "context_window_tokens": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "capability_scores": {
+      "type": "object",
+      "description": "Category -> score (0..100), e.g. coding, reasoning, security_analysis.",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 100
+      }
+    },
+    "score_version": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1
+    },
+    "current_load": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "rate_limit_rpm": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "historical_success_rate": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "updated_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    }
+  },
+  "additionalProperties": false
+}

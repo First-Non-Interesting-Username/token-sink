@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/provider.schema.json",
+  "title": "Provider",
+  "description": "Registered AI provider endpoint behind the common adapter interface (PLAN \u00a78).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record_type",
+    "provider_id",
+    "kind",
+    "base_url",
+    "enabled",
+    "registered_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "provider"
+    },
+    "provider_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "native_free",
+        "gateway",
+        "custom_endpoint"
+      ]
+    },
+    "base_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "free_model_filter_required": {
+      "type": "boolean",
+      "description": "Partly-free gateways may only be used through an explicit free-model filter."
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "health": {
+      "enum": [
+        "unknown",
+        "healthy",
+        "degraded",
+        "down"
+      ],
+      "default": "unknown"
+    },
+    "auth_ref": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Reference to a credential in the OS credential store; NEVER a secret value."
+    },
+    "registered_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "updated_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    }
+  },
+  "additionalProperties": false
+}

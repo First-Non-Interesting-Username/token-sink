@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hermesagentv3010/token-sink/schemas/final_report.schema.json",
+  "title": "Final report",
+  "description": "Polished report written to vulnerabilities/<finding-id>/ only after final review passes (PLAN \u00a710.6). Submission is a separate human-approved action.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record_type",
+    "report_uuid",
+    "finding_uuid",
+    "campaign_uuid",
+    "markdown_artifact_ref",
+    "final_review_passed",
+    "final_review_uuids",
+    "altered_claims",
+    "severity",
+    "content_hash",
+    "redaction_status",
+    "author_provenance",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "final_report"
+    },
+    "report_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "finding_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "campaign_uuid": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "markdown_artifact_ref": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable Markdown representation."
+    },
+    "final_review_passed": {
+      "type": "boolean"
+    },
+    "final_review_uuids": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/uuid"
+      }
+    },
+    "altered_claims": {
+      "type": "array",
+      "description": "Any claim changed during polishing must link back to supporting evidence.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "claim": {
+            "type": "string"
+          },
+          "evidence_uuids": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "common.schema.json#/$defs/uuid"
+            }
+          }
+        },
+        "required": [
+          "claim",
+          "evidence_uuids"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "severity": {
+      "$ref": "common.schema.json#/$defs/severity"
+    },
+    "submission_status": {
+      "enum": [
+        "not_submitted",
+        "approved_to_submit",
+        "submitted"
+      ],
+      "default": "not_submitted"
+    },
+    "submitted_by_human": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Human identity approving submission; agents cannot set this."
+    },
+    "content_hash": {
+      "$ref": "common.schema.json#/$defs/sha256_hash"
+    },
+    "redaction_status": {
+      "$ref": "common.schema.json#/$defs/redaction_status"
+    },
+    "author_provenance": {
+      "$ref": "common.schema.json#/$defs/agent_provenance"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "updated_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    }
+  },
+  "additionalProperties": false
+}
