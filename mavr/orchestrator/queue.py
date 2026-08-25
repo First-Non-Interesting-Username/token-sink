@@ -544,6 +544,9 @@ async def sweep_stale_leases(
         ),
     )
     dead = int(cur.rowcount or 0)
+    # Commit so the reclaimed state is visible to subsequent workers
+    # using a different connection.
+    await conn.commit()
     return SweepResult(reclaimed=reclaimed, dead_lettered=dead, requeued=0)
 
 
