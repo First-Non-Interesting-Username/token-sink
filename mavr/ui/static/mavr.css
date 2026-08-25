@@ -1,0 +1,34 @@
+/* MAVR local UI — minimal CSS, no external assets */
+:root {
+  --bg: #0e1117;
+  --panel: #161b22;
+  --border: #30363d;
+  --fg: #e6edf3;
+  --muted: #8b949e;
+  --accent: #58a6ff;
+  --ok: #3fb950;
+  --warn: #d29922;
+  --err: #f85149;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--fg); }
+.topbar { display: flex; align-items: center; padding: 0.6rem 1rem; border-bottom: 1px solid var(--border); background: var(--panel); }
+.brand { font-weight: bold; margin-right: 1.5rem; color: var(--accent); }
+.nav a { color: var(--muted); text-decoration: none; margin-right: 1rem; }
+.nav a.active { color: var(--fg); border-bottom: 2px solid var(--accent); }
+.status { margin-left: auto; font-size: 0.85rem; color: var(--muted); }
+.status[data-state="on"] { color: var(--err); }
+main { padding: 1.5rem; max-width: 1100px; }
+h1, h2 { font-weight: 600; }
+.muted { color: var(--muted); }
+code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.9em; background: var(--panel); padding: 0 0.25em; border-radius: 3px; }
+.badge { display: inline-block; padding: 0 0.5em; border-radius: 999px; font-size: 0.8em; background: var(--panel); border: 1px solid var(--border); margin-right: 0.4em; }
+.event-list, .finding-list, .provider-list, .approval-list, .audit-list { list-style: none; padding: 0; }
+.event-list li, .finding-list li, .provider-list li, .approval-list li, .audit-list li { padding: 0.4rem 0; border-bottom: 1px solid var(--border); }
+.log { background: var(--panel); border: 1px solid var(--border); padding: 0.75rem; max-height: 60vh; overflow: auto; font-size: 0.85em; }
+table.grid { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+table.grid th, table.grid td { padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); text-align: left; }
+table.grid th { color: var(--muted); font-weight: 500; }
+button { background: var(--accent); color: #0e1117; border: 0; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; }
+button.danger { background: var(--err); color: white; }
+input, select, textarea { background: var(--panel); border: 1px solid var(--border); color: var(--fg); padding: 0.4rem 0.6rem; border-radius: 4px; }

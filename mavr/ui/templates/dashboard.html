@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>MAVR · Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/static/mavr.css" />
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/mavr.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">MAVR</div>
+    <nav class="nav">
+      <a href="/dashboard" class="active">Dashboard</a>
+      <a href="/activity">Activity</a>
+      <a href="/findings">Findings</a>
+      <a href="/providers">Providers</a>
+      <a href="/usage">Usage</a>
+      <a href="/policy">Policy</a>
+      <a href="/logs">Logs</a>
+    </nav>
+    <div class="status" id="ks-banner" data-state="off">kill switch: <span>off</span></div>
+  </header>
+  <main hx-get="/static/dashboard.partial.html" hx-trigger="load, every 5s" hx-swap="innerHTML" hx-target="#dash-body">
+    <h1>Dashboard</h1>
+    <div id="dash-body">
+      <p>Loading…</p>
+    </div>
+  </main>
+  <input id="api-token" type="hidden" value="{{ token }}" />
+</body>
+</html>

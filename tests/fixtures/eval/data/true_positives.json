@@ -1,0 +1,36 @@
+[
+  {
+    "id": "tp-reflected-xss",
+    "title": "Reflected XSS in search parameter",
+    "description": "The /search endpoint reflects the 'q' parameter without HTML-escaping it. A request to /search?q=<script>alert(1)</script> executes JavaScript in the user's browser.",
+    "severity": "high",
+    "confidence": "confirmed",
+    "evidence_refs": [
+      "11111111-1111-4111-8111-111111111111",
+      "22222222-2222-4222-8222-222222222222"
+    ],
+    "expected_state": "vulnerabilities"
+  },
+  {
+    "id": "tp-sqli",
+    "title": "SQL injection in login",
+    "description": "The username field of /login is concatenated into a raw SQL query. A single quote in the username produces a PostgreSQL syntax error, confirming injection.",
+    "severity": "critical",
+    "confidence": "confirmed",
+    "evidence_refs": [
+      "33333333-3333-4333-8333-333333333333"
+    ],
+    "expected_state": "vulnerabilities"
+  },
+  {
+    "id": "tp-ssrf",
+    "title": "SSRF in image proxy",
+    "description": "The /proxy/image?url= endpoint fetches arbitrary URLs with no allowlist. A request to /proxy/image?url=http://169.254.169.254/latest/meta-data/ returns AWS IAM credentials.",
+    "severity": "high",
+    "confidence": "confirmed",
+    "evidence_refs": [
+      "44444444-4444-4444-8444-444444444444"
+    ],
+    "expected_state": "vulnerabilities"
+  }
+]

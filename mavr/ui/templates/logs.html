@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>MAVR · Logs</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/static/mavr.css" />
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/mavr.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">MAVR</div>
+    <nav class="nav">
+      <a href="/dashboard">Dashboard</a>
+      <a href="/activity">Activity</a>
+      <a href="/findings">Findings</a>
+      <a href="/providers">Providers</a>
+      <a href="/usage">Usage</a>
+      <a href="/policy">Policy</a>
+      <a href="/logs" class="active">Logs</a>
+    </nav>
+    <div class="status" id="ks-banner" data-state="off">kill switch: <span>off</span></div>
+  </header>
+  <main>
+    <h1>Logs &amp; diagnostics</h1>
+    <p class="muted">
+      Structured JSON events from the in-process event bus. The
+      full log file is available on the local filesystem; the CLI
+      <code>system logs tail</code> tails it.
+    </p>
+    <pre id="event-log" class="log" hx-ext="sse" sse-connect="/api/events/stream" sse-swap="message">connecting…</pre>
+  </main>
+  <input id="api-token" type="hidden" value="{{ token }}" />
+</body>
+</html>

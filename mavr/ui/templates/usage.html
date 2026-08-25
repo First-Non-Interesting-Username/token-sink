@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>MAVR · Usage</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/static/mavr.css" />
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/mavr.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">MAVR</div>
+    <nav class="nav">
+      <a href="/dashboard">Dashboard</a>
+      <a href="/activity">Activity</a>
+      <a href="/findings">Findings</a>
+      <a href="/providers">Providers</a>
+      <a href="/usage" class="active">Usage</a>
+      <a href="/policy">Policy</a>
+      <a href="/logs">Logs</a>
+    </nav>
+    <div class="status" id="ks-banner" data-state="off">kill switch: <span>off</span></div>
+  </header>
+  <main>
+    <h1>Usage &amp; cost</h1>
+    <p class="muted">Free vs paid split, totals, per (provider, model) breakdown.</p>
+    <div id="usage-body"><em>Loading…</em></div>
+  </main>
+  <input id="api-token" type="hidden" value="{{ token }}" />
+  <script>
+    window.addEventListener("DOMContentLoaded", () => {
+      const tok = document.getElementById("api-token").value;
+      fetch("/api/usage", { headers: { "Authorization": "Bearer " + tok } })
+        .then(r => r.ok ? r.json() : {})
+        .then(data => {
+          const body = document.getElementById("usage-body");
+          const items = data.by_provider_model || [];
+          body.innerHTML = `
+            <p>
+              <strong>${data.free_calls_total}</strong> free calls ·
+              <strong>${data.paid_calls_total}</strong> paid calls ·
+              est. cost <strong>$${(data.estimated_cost_total || 0).toFixed(4)}</strong>
+            </p>
+            <table class="grid">
+              <thead><tr><th>Provider</th><th>Model</th><th>Free</th><th>Paid</th><th>In</th><th>Out</th><th>Cost</th><th>Latency</th></tr></thead>
+              <tbody>
+                ${items.length === 0 ? "<tr><td colspan='8'><em>No usage yet.</em></td></tr>" : items.map(i => `
+                  <tr>
+                    <td>${i.provider_id}</td>
+                    <td>${i.model_key}</td>
+                    <td>${i.free_calls}</td>
+                    <td>${i.paid_calls}</td>
+                    <td>${i.input_tokens}</td>
+                    <td>${i.output_tokens}</td>
+                    <td>$${i.estimated_cost.toFixed(4)}</td>
+                    <td>${i.avg_latency_ms.toFixed(1)} ms</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          `;
+        });
+    });
+  </script>
+</body>
+</html>

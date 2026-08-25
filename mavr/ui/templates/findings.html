@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>MAVR · Findings</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/static/mavr.css" />
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/mavr.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">MAVR</div>
+    <nav class="nav">
+      <a href="/dashboard">Dashboard</a>
+      <a href="/activity">Activity</a>
+      <a href="/findings" class="active">Findings</a>
+      <a href="/providers">Providers</a>
+      <a href="/usage">Usage</a>
+      <a href="/policy">Policy</a>
+      <a href="/logs">Logs</a>
+    </nav>
+    <div class="status" id="ks-banner" data-state="off">kill switch: <span>off</span></div>
+  </header>
+  <main>
+    <h1>Finding workspace</h1>
+    <p class="muted">Lists the most recent findings. The detail panel is the Finding Workspace view (spec §13).</p>
+    <ul id="finding-list" class="finding-list">
+      <li><em>Loading…</em></li>
+    </ul>
+  </main>
+  <input id="api-token" type="hidden" value="{{ token }}" />
+  <script>
+    window.addEventListener("DOMContentLoaded", () => {
+      const tok = document.getElementById("api-token").value;
+      fetch("/api/findings?limit=50", { headers: { "Authorization": "Bearer " + tok } })
+        .then(r => r.ok ? r.json() : [])
+        .then(rows => {
+          const list = document.getElementById("finding-list");
+          if (!rows.length) { list.innerHTML = "<li><em>No findings yet.</em></li>"; return; }
+          list.innerHTML = rows.map(f => `
+            <li>
+              <code>${f.id.slice(0,8)}</code>
+              <span class="badge state-${f.state}">${f.state}</span>
+              <span class="title">${f.title || "(untitled)"}</span>
+              <span class="muted">v${f.current_version} · ${f.severity || "—"}</span>
+            </li>
+          `).join("");
+        });
+    });
+  </script>
+</body>
+</html>

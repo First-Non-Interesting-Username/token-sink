@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>MAVR · Providers &amp; models</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/static/mavr.css" />
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/mavr.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">MAVR</div>
+    <nav class="nav">
+      <a href="/dashboard">Dashboard</a>
+      <a href="/activity">Activity</a>
+      <a href="/findings">Findings</a>
+      <a href="/providers" class="active">Providers</a>
+      <a href="/usage">Usage</a>
+      <a href="/policy">Policy</a>
+      <a href="/logs">Logs</a>
+    </nav>
+    <div class="status" id="ks-banner" data-state="off">kill switch: <span>off</span></div>
+  </header>
+  <main>
+    <h1>Providers &amp; models</h1>
+    <ul id="provider-list" class="provider-list">
+      <li><em>Loading…</em></li>
+    </ul>
+  </main>
+  <input id="api-token" type="hidden" value="{{ token }}" />
+  <script>
+    window.addEventListener("DOMContentLoaded", () => {
+      const tok = document.getElementById("api-token").value;
+      fetch("/api/providers", { headers: { "Authorization": "Bearer " + tok } })
+        .then(r => r.ok ? r.json() : [])
+        .then(rows => {
+          const list = document.getElementById("provider-list");
+          if (!rows.length) { list.innerHTML = "<li><em>No providers configured.</em></li>"; return; }
+          list.innerHTML = rows.map(p => `
+            <li>
+              <span class="badge">${p.kind}</span>
+              <strong>${p.provider_id}</strong>
+              <span class="muted">${p.model_count} model(s) · auth=${p.auth_status} · free=${p.free}</span>
+            </li>
+          `).join("");
+        });
+    });
+  </script>
+</body>
+</html>

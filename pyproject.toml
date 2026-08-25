@@ -1,0 +1,81 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mavr"
+version = "0.1.0"
+description = "Multi-Agent Security Vulnerability Research System"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "MAVR Contributors" }]
+keywords = ["security", "vulnerability-research", "multi-agent"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Information Security",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+]
+dependencies = [
+    "typer==0.12.5",
+    "pydantic==2.9.2",
+    "fastapi==0.115.4",
+    "uvicorn[standard]==0.32.0",
+    "aiosqlite==0.20.0",
+    "httpx==0.27.2",
+    "pydantic-settings==2.6.0",
+    "structlog==24.4.0",
+    "pyyaml==6.0.2",
+    "platformdirs==4.3.6",
+    "keyring==25.5.0",
+    "ddgs>=9.0.0",
+    "beautifulsoup4==4.12.3",
+    "rich==13.9.4",
+    "click<8.2",
+    "jinja2==3.1.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.3",
+    "pytest-asyncio==0.24.0",
+    "ruff==0.7.2",
+    "mypy==1.13.0",
+]
+
+[project.scripts]
+system = "mavr.cli.main:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mavr*"]
+
+[tool.setuptools.package-data]
+mavr = ["py.typed", "ui/templates/*.html", "ui/static/*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "B", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# FastAPI's `Depends` is meant to be used as a default value for the
+# parameter that consumes the dependency. Telling us not to do that
+# breaks the framework idiom.
+"mavr/api/app.py" = ["B008"]
+"tests/test_phase7_api.py" = ["B017", "F811"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "load: load / scale tests; skip with '-m \"not load\"' for a fast loop",
+]
