@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "record_type": "provider",
+  "provider_id": "example-native-free",
+  "display_name": "Example Native-Free Provider (documentation only)",
+  "kind": "native_free",
+  "base_url": "https://api.example.com/v1",
+  "free_model_filter_required": false,
+  "enabled": false,
+  "health": "unknown",
+  "auth_ref": "EXAMPLE_NATIVE_FREE_API_KEY",
+  "registered_at": "2026-08-25T00:00:00Z",
+  "updated_at": "2026-08-25T00:00:00Z"
+}

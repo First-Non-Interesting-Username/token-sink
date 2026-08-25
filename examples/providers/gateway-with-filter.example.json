@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "record_type": "provider",
+  "provider_id": "example-gateway-filtered",
+  "display_name": "Example Gateway Provider With Free-Model Filter (documentation only)",
+  "kind": "gateway",
+  "base_url": "https://gateway.example.com/api/v1",
+  "free_model_filter_required": true,
+  "enabled": false,
+  "health": "unknown",
+  "auth_ref": "EXAMPLE_GATEWAY_API_KEY",
+  "registered_at": "2026-08-25T00:00:00Z",
+  "updated_at": "2026-08-25T00:00:00Z"
+}

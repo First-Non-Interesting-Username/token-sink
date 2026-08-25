@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "record_type": "provider",
+  "provider_id": "example-custom-endpoint",
+  "display_name": "Example Self-Hosted Custom Endpoint (documentation only)",
+  "kind": "custom_endpoint",
+  "base_url": "http://127.0.0.1:8080/v1",
+  "free_model_filter_required": false,
+  "enabled": false,
+  "health": "unknown",
+  "auth_ref": null,
+  "registered_at": "2026-08-25T00:00:00Z",
+  "updated_at": "2026-08-25T00:00:00Z"
+}

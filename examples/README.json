@@ -1,0 +1,15 @@
+{
+  "$comment": "Example configuration set for token-sink (issue #90). Everything here targets RFC 2606 reserved domains or local_fixture entries ONLY. NEVER run against real targets.",
+  "files": {
+    "config.example.yaml": "Full application config (PLAN section 16) - copy to tokensink.yaml and adjust.",
+    "campaign.example.json": "Example campaign record exercising every PLAN section 5 field, validated against schemas/campaign.schema.json by tests/unit/test_examples.py.",
+    "scope-policy.example.json": "Allowlist-only scope policy with SSRF-relevant restrictions (local_fixture + reserved domains), matching the example campaign UUID.",
+    "providers/native-free.example.json": "Provider config, native-free class (PLAN section 8.1).",
+    "providers/gateway-with-filter.example.json": "Provider config, gateway class with free_model_filter_required=true (PLAN sections 8.1/7.3).",
+    "providers/custom-endpoint.example.json": "Provider config, custom_endpoint class (self-hosted OpenAI-compatible server)."
+  },
+  "credential_safety": {
+    "rule": "Credentials are NEVER literal values. Config files reference ENVIRONMENT VARIABLE NAMES (auth_ref); for dry runs export fake placeholders such as sk-example-0000000000000000000000."
+  },
+  "golden_rule": "These examples exist so new users and CI can validate structure offline. Do not point any tooling at real infrastructure using these files."
+}

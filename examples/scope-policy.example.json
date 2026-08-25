@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "record_type": "scope_policy",
+  "policy_uuid": "00000000-0000-4000-8000-00000000901e",
+  "campaign_uuid": "00000000-0000-4000-8000-00000000c0de",
+  "in_scope": [
+    {
+      "kind": "local_fixture",
+      "identifier": "evaluation/fixtures/true_positive.json"
+    },
+    {
+      "kind": "local_fixture",
+      "identifier": "evaluation/fixtures/false_positive.json"
+    },
+    {
+      "kind": "domain",
+      "identifier": "app.example.com"
+    },
+    {
+      "kind": "url",
+      "identifier": "https://api.example.com/v1/"
+    }
+  ],
+  "out_of_scope": [
+    {
+      "kind": "domain",
+      "identifier": "example.net"
+    },
+    {
+      "kind": "domain",
+      "identifier": "*.internal.example.com"
+    }
+  ],
+  "allowed_http_methods": [
+    "GET",
+    "HEAD"
+  ],
+  "allowed_tools": [
+    "search",
+    "http_fetch",
+    "fixture_loader"
+  ],
+  "prohibited_actions": [
+    "exploit",
+    "denial_of_service",
+    "destructive_mutation",
+    "spam",
+    "credential_attacks",
+    "data_exfiltration"
+  ],
+  "rate_limits": {
+    "requests_per_minute_per_target": 30,
+    "max_concurrency_per_target": 2
+  },
+  "requires_human_approval": true,
+  "active_testing_enabled": false,
+  "created_at": "2026-08-25T00:00:00Z"
+}

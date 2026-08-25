@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "record_type": "campaign",
+  "campaign_uuid": "00000000-0000-4000-8000-00000000c0de",
+  "name": "example-local-fixture-campaign",
+  "authorization_reference": "EXAMPLE-ONLY: self-authorized dry run against synthetic fixtures; replace with a real program name + authorization document reference before any live use",
+  "program_name": "examples-walkthrough (documentation)",
+  "in_scope_targets": [
+    {
+      "kind": "local_fixture",
+      "identifier": "evaluation/fixtures/true_positive.json"
+    },
+    {
+      "kind": "local_fixture",
+      "identifier": "evaluation/fixtures/false_positive.json"
+    },
+    {
+      "kind": "domain",
+      "identifier": "app.example.com"
+    },
+    {
+      "kind": "url",
+      "identifier": "https://api.example.com/v1/"
+    }
+  ],
+  "out_of_scope_targets": [
+    {
+      "kind": "domain",
+      "identifier": "example.net"
+    },
+    {
+      "kind": "domain",
+      "identifier": "*.internal.example.com"
+    }
+  ],
+  "allowed_http_methods": [
+    "GET",
+    "HEAD"
+  ],
+  "allowed_test_classes": [
+    "recon",
+    "passive"
+  ],
+  "prohibited_actions": [
+    "exploit",
+    "denial_of_service",
+    "destructive_mutation",
+    "spam",
+    "credential_attacks",
+    "data_exfiltration"
+  ],
+  "max_request_rate_per_target": 30,
+  "max_concurrency_per_target": 2,
+  "max_duration_seconds": 3600,
+  "token_budget": 100000,
+  "tool_budget": 500,
+  "active_testing_enabled": false,
+  "human_approval_required_for": [
+    "active_testing",
+    "poc_execution",
+    "submission",
+    "deletion"
+  ],
+  "data_handling": {
+    "store_raw_observations_separately": true,
+    "telemetry_enabled": false
+  },
+  "retention_settings": {
+    "days": 90,
+    "redact_secrets_in_logs": true
+  },
+  "created_at": "2026-08-25T00:00:00Z",
+  "updated_at": "2026-08-25T00:00:00Z"
+}
