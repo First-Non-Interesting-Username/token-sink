@@ -28,6 +28,18 @@ processes live in `docs/`, not here.**
   comments and conversation threads on the PR and address or explicitly
   acknowledge them. Do not squash-merge over unresolved feedback — green CI is
   necessary but not sufficient.
+- **Wait 15 minutes before merging.** After opening a PR (or after the last
+  push to it), wait at least 15 minutes before merging so reviewers have a
+  chance to look at it. During that window, check for new PR comments every
+  5 minutes and respond to anything that appears.
+- **Respond to all PR conversations.** Every agent that touches a PR must
+  reply to open conversation threads on it — answer questions, address
+  feedback, or explicitly acknowledge it — rather than leaving threads
+  unresolved.
+- **Reviewers: poll for new branches every 2.5 minutes.** An agent acting as
+  a reviewer should check for newly opened branches/PRs at most every 2.5
+  minutes while on review duty; do not sit on a branch for long stretches
+  before reviewing it.
 - **Tag every PR comment with a per-session UUID.** When an agent posts a
   review comment, issue reply, or any other comment on a PR, prefix the body
   with `[agent:<uuid>]` (one UUID generated at session start, reused for every
