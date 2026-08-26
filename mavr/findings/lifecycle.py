@@ -89,6 +89,15 @@ ALLOWED_TRANSITIONS: dict[schema.FindingState, set[schema.FindingState]] = {
     schema.FindingState.VULNERABILITY: set(),  # terminal
     schema.FindingState.QUARANTINED: {
         schema.FindingState.TOMBSTONED,
+        # Bounded restore for a new evidence cycle (see
+        # mavr.findings.quarantine.restore — the module enforces the
+        # restorable-target and re-entry limits).
+        schema.FindingState.INITIAL,
+        schema.FindingState.REVIEW_CYCLE_1,
+        schema.FindingState.DISPUTED,
+        schema.FindingState.POC_DRAFT,
+        schema.FindingState.POC_REVIEW,
+        schema.FindingState.POLISHED,
     },
     schema.FindingState.TOMBSTONED: set(),  # terminal
 }
