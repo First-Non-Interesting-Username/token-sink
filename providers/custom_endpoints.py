@@ -36,7 +36,7 @@ class UnclassifiedModelError(EndpointConfigError):
     """A model with unknown free-status was selected under free-only mode."""
 
 
-class ModelStatus(str, enum.Enum):
+class ModelStatus(enum.StrEnum):
     """User-declared free/paid classification for custom-endpoint models."""
 
     FREE = "free"
