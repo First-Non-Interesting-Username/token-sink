@@ -142,8 +142,10 @@ filenames alone, are identity; artifact names are traversal-proof.
 
 Structured events and metrics (agent, model/provider, research, system)
 queryable by campaign and time range; tamper-evident audit log for approvals,
-blocked actions, state changes, submissions. Privacy-preserving telemetry by
-default — no target data to external analytics without explicit consent.
+blocked actions, state changes, submissions (see `docs/audit-log.md` —
+distinct from the streaming event store in `docs/event-store.md`).
+Privacy-preserving telemetry by default — no target data to external
+analytics without explicit consent.
 
 ## How the pieces fit together (request flow)
 
