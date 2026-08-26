@@ -23,6 +23,7 @@ class ControlError(RuntimeError):
 
 class ControlAction(enum.StrEnum):
     KILL_SWITCH_ACTIVATE = "kill_switch_activate"
+    KILL_SWITCH_REARM = "kill_switch_rearm"
     CAMPAIGN_PAUSE = "campaign_pause"
     CAMPAIGN_RESUME = "campaign_resume"
     CAMPAIGN_STOP = "campaign_stop"
@@ -116,6 +117,13 @@ class Controls:
             actor=actor,
         )
         return n
+
+    def rearm_kill_switch(self, actor: str = "") -> bool:
+        """Operator-explicit re-arm after a kill. Audited with actor identity
+        (#65 item 5). Returns True if an engagement was actually cleared."""
+        cleared = self.kill_switch.rearm(actor=actor)
+        self.audit.append(ControlAction.KILL_SWITCH_REARM.value, {"cleared": cleared}, actor=actor)
+        return cleared
 
     # -- campaign controls -------------------------------------------------
 
