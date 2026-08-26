@@ -35,9 +35,10 @@ pythonpath = ["src", "."]
 testpaths = ["tests"]
 # CI safety net: no placeholder test should ever hang the pipeline
 timeout = 60
-addopts = "-ra"
+addopts = "-ra -m 'not load'"
 markers = [
     "integration: end-to-end tests across subsystems",
+    "load: load/concurrency tests excluded from default CI runs (run explicitly)",
     "safety: security guardrail tests (must never be skipped in CI)",
 ]
 
