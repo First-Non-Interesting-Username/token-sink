@@ -34,6 +34,10 @@ from storage.base import RecordExistsError, Storage
 # exports/filters can treat execution bookkeeping separately.
 KIND_EXECUTION = "execution"
 KIND_STEP = "execution_step"
+# Task→execution binding: enforces one-execution-per-task at the DB level
+# (UNIQUE idempotency_key) instead of scanning all executions in Python,
+# which was O(n) and silently capped at the list limit (issue #245).
+KIND_TASK_BIND = "execution_task_bind"
 
 
 def _safe_component(s: str) -> str:
@@ -77,14 +81,22 @@ class ExecutionRunner:
                     f"execution {execution_id} already journalled for a different task"
                 ) from None
             return  # same task, same id: restart path is fine
-        # New execution: reject if the task already has ANY other execution,
-        # so one task can never fork into two execution identities.
-        own_id = f"exec-{_safe_component(execution_id)}"
-        for rec in self.storage.list_records(KIND_EXECUTION, limit=1000):
-            if rec["data"].get("task_id") == task_id and rec["id"] != own_id:
-                raise DuplicateExecutionError(
-                    f"task {task_id} already has execution {rec['data'].get('execution_id')}"
-                )
+        # New execution: claim the task→execution binding at the DB level. The
+        # UNIQUE idempotency_key on the bind record means only one execution can
+        # ever be bound to a task — no scan of prior executions needed (issue #245).
+        try:
+            self.storage.insert_record(
+                KIND_TASK_BIND,
+                f"bind-{_safe_component(task_id)}",
+                {"execution_id": execution_id},
+                idempotency_key=f"bind:{_safe_component(task_id)}",
+            )
+        except RecordExistsError:
+            bind = self.storage.get_record(KIND_TASK_BIND, f"bind-{_safe_component(task_id)}")
+            bound_exec = bind["data"].get("execution_id") if bind else None
+            raise DuplicateExecutionError(
+                f"task {task_id} already has execution {bound_exec}"
+            ) from None
 
     def step_state(self, execution_id: str, step: str) -> str | None:
         """'started' | 'completed' | None for this (execution, step)."""

@@ -30,6 +30,9 @@ acceptance criteria) and its phased roadmap.
   conventions, adding providers/tests/docs.
 - [docs/idempotency.md](docs/idempotency.md) — idempotent task execution:
   journal-first side effects and exactly-once semantics (issue #126).
+- [docs/severity-rubric.md](docs/severity-rubric.md) — deterministic
+  severity scoring: impact axes → severity bands, justified severity
+  changes, and reviewer-disagreement escalation (issue #239).
 
 ## For AI agents
 

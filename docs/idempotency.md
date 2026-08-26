@@ -35,3 +35,10 @@ Unique constraints for UUIDs/event IDs live at the DB level
 (`records.idempotency_key UNIQUE` in migration v1), not in application code —
 a duplicate event insert raises `storage.base.RecordExistsError`, which callers
 treat as "already done".
+
+The one-execution-per-task invariant is also DB-enforced: `begin()` writes a
+`execution_task_bind` journal row keyed uniquely on the task id. A second
+execution for an already-bound task loses the UNIQUE race and raises
+`DuplicateExecutionError` — no scan of prior executions, so the guarantee does
+not degrade with journal size (issue #245; see
+`tests/unit/test_task_bind.py`).
