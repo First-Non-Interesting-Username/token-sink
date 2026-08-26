@@ -77,6 +77,15 @@ class CatalogEntry:
     # Requests/tokens per minute budgets; None = no locally-known limit.
     request_rate_limit: int | None = None
     token_rate_limit: int | None = None
+    # Pricing per million tokens (input/output); None = unknown/not applicable.
+    # Currency is REQUIRED whenever any price is set (issue #210).
+    price_input_per_mtok: float | None = None
+    price_output_per_mtok: float | None = None
+    price_currency: str | None = None
+    # Free-tier constraints, e.g. {"requests_per_day": 50,
+    # "context_cap_tokens": 16000}; keys validated by
+    # providers.model_catalog.seed.validate_entry.
+    free_tier_constraints: dict[str, Any] = field(default_factory=dict)
     trust_level: TrustLevel = TrustLevel.GATEWAY
     free_status: FreeStatus = FreeStatus.UNKNOWN
     deprecated: bool = False
@@ -98,6 +107,10 @@ class CatalogEntry:
             "supports_structured_output": self.supports_structured_output,
             "request_rate_limit": self.request_rate_limit,
             "token_rate_limit": self.token_rate_limit,
+            "price_input_per_mtok": self.price_input_per_mtok,
+            "price_output_per_mtok": self.price_output_per_mtok,
+            "price_currency": self.price_currency,
+            "free_tier_constraints": dict(self.free_tier_constraints),
             "trust_level": self.trust_level.value,
             "free_status": self.free_status.value,
             "deprecated": self.deprecated,
@@ -117,6 +130,10 @@ class CatalogEntry:
             supports_structured_output=bool(d.get("supports_structured_output", False)),
             request_rate_limit=d.get("request_rate_limit"),
             token_rate_limit=d.get("token_rate_limit"),
+            price_input_per_mtok=d.get("price_input_per_mtok"),
+            price_output_per_mtok=d.get("price_output_per_mtok"),
+            price_currency=d.get("price_currency"),
+            free_tier_constraints=dict(d.get("free_tier_constraints", {})),
             trust_level=TrustLevel(d.get("trust_level", "gateway")),
             free_status=FreeStatus(d.get("free_status", "unknown")),
             deprecated=bool(d.get("deprecated", False)),
