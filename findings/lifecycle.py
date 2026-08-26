@@ -25,7 +25,12 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from findings.review_policy import Phase
+
+if TYPE_CHECKING:
+    from findings.review_policy import ReviewPolicyEngine
 
 from findings.deletion_guard import assert_not_deleted, require_distinct_reviewer
 
@@ -457,13 +462,28 @@ class FindingLifecycle:
         requested_changes: str = "",
         confidence: float = 0.0,
         saw_prior_reviews: bool = False,
+        policy_engine: ReviewPolicyEngine | None = None,
     ) -> LifecycleResult:
-        """§10.5 four-agent PoC review — one reviewer's verdict."""
+        """§10.5 four-agent PoC review — one reviewer's verdict.
+
+        When a ``policy_engine`` is supplied (review-mode configuration,
+        PLAN §10.5), visibility is enforced *before* the review is
+        recorded: in independent-first mode a reviewer who saw prior
+        results before blind collection completed is rejected so the
+        violation never enters the record.
+        """
         if verdict not in POC_VERDICTS:
             raise LifecycleError(f"invalid verdict {verdict!r}")
         finding = self._get(finding_uuid)
         if finding.state != State.POC_REVIEW:
             raise LifecycleError("PoC reviews only accepted during poc_review")
+        if policy_engine is not None:
+            # Enforce mode rules pre-record; raises on independent-first violations.
+            policy_engine.check_visibility(
+                Phase.POC_REVIEW,
+                finding.poc_reviews,
+                saw_prior_reviews=saw_prior_reviews,
+            )
         # Discussion-first mode allows seeing prior results; independent-first
         # forbids it until blind collection completes. Mode selection lives in
         # campaign policy; we record what the reviewer saw for auditability.
@@ -492,6 +512,7 @@ class FindingLifecycle:
         finding_uuid: str,
         actor_uuid: str,
         require_all_accept: bool = False,
+        policy_engine: ReviewPolicyEngine | None = None,
     ) -> LifecycleResult | None:
         """§10.5 quorum evaluation once four reviews are in.
 
@@ -499,11 +520,20 @@ class FindingLifecycle:
         safety/validity objection. If require_all_accept, only unanimous
         acceptance advances. All-reject → quarantine (caller may instead use
         revert_from_poc_review for the post-first-review revert path).
+
+        When ``policy_engine`` is supplied (review-mode configuration), its
+        quorum policy decides; the legacy ``require_all_accept`` flag is a
+        shorthand for the same knob and applies only without an engine.
         """
         finding = self._get(finding_uuid)
         if finding.state != State.POC_REVIEW:
             raise LifecycleError("quorum evaluated only during poc_review")
         reviews = finding.poc_reviews
+
+        if policy_engine is not None:
+            decision = policy_engine.evaluate(Phase.POC_REVIEW, reviews)
+            return self._apply_quorum_decision(finding, decision, actor_uuid)
+
         if len(reviews) < 4:
             raise LifecycleError(f"need 4 PoC reviews, have {len(reviews)}")
         verdicts = [r["verdict"] for r in reviews]
@@ -631,6 +661,31 @@ class FindingLifecycle:
         )
 
     # -- internal ----------------------------------------------------------
+
+    def _apply_quorum_decision(
+        self, finding: Finding, decision: dict[str, Any] | None, actor_uuid: str
+    ) -> LifecycleResult | None:
+        """Map a ReviewPolicyEngine decision onto lifecycle transitions."""
+        if decision is None:
+            return None
+        outcome = decision.get("outcome")
+        if outcome == "advance":
+            return self._transition(
+                finding,
+                State.POLISHED_REPORT,
+                reason=f"poc_quorum_{decision.get('reason', 'advance')}",
+                actor_uuid=actor_uuid,
+            )
+        if outcome == "reject_all":
+            return self._transition(
+                finding,
+                State.QUARANTINED,
+                reason="poc_all_reject_quarantined",
+                actor_uuid=actor_uuid,
+            )
+        # pending / unresolved → no transition; more evidence needed.
+        self._append_history_only(finding, f"poc_quorum_{outcome}", actor_uuid)
+        return None
 
     def _get(self, finding_uuid: str) -> Finding:
         finding = self.store.load(finding_uuid)
