@@ -1,148 +1,62 @@
-"""Time-series metrics store (issue #156, PLAN §14/§16).
+"""Time-series metrics store (issue #156, PLAN §14).
 
 Design decisions (per AGENTS.md):
 
-- Local-first, dependency-free: an in-process store with a JSONL persistence
-  file. The four §14 metric families (agent, provider/model, research,
-  system) are just a ``family`` tag — adding one needs no schema migration.
-  A SQLite backend can wrap the same interface later without callers
-  changing.
-- Records are points: ``(ts, family, name, campaign_id, agent_id, value,
-  unit, tags)``. Query API filters by family/name/campaign/agent + arbitrary
-  time range, then aggregates with sum / avg / min / max / count / pct.
-  Aggregation runs in Python over the filtered slice — small enough locally,
-  and it avoids N+1 scans over the event store (#42), which stays the
-  tamper-evident event log rather than a metrics backend.
-- Retention aligns with §16 retention settings: ``prune(older_than_ts)``
-  drops stale points; privacy-preserving by default — no target data in
-  tags, only IDs and counts.
-- Writes are cheap appends; reads snapshot under a lock so a concurrent
-  writer can never produce a torn aggregation.
+- Local-first in-memory store of timestamped metric samples. The four §14
+  families (agent, provider/model, research, system) are just a validated
+  ``family`` tag — the query API is uniform across them.
+- Every sample carries campaign_id (nullable for system-wide metrics), a
+  metric name, a numeric value, and free-form tags (e.g. provider/model).
+  Queries filter by family, campaign, name, tag equality and an arbitrary
+  time range — PLAN §14 requires "queryable by campaign and time range".
+- Aggregations (sum / avg / min / max / count / p50 / p95) computed on
+  demand; group_by lets UI pages get per-provider/per-model breakdowns in a
+  single call instead of N+1 scans.
+- Retention: ``prune(older_than_ts)`` drops expired samples so operators can
+  wire it to the §16 retention settings; pruning is explicit, not automatic,
+  because retention cadence is config, not code.
+- Privacy-preserving by default: samples hold only numbers and opaque tag
+  strings — no prompt content, no target data ever enters this store.
+
+The in-memory backend is the reference implementation; a SQLite backend
+(#53) can persist the same sample shape behind the same interface.
 """
 
 from __future__ import annotations
 
-import json
-import threading
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
-# The four PLAN §14 metric families.
-FAMILIES = ("agent", "provider_model", "research", "system")
+# The four PLAN §14 metric families. Kept as a closed set so typos fail fast
+# at record() time instead of silently creating an unusable slice.
+FAMILIES = ("agent", "provider", "research", "system")
 
-AGGREGATIONS = ("sum", "avg", "min", "max", "count", "pct")
+
+class MetricsError(ValueError):
+    """Invalid family, aggregation, or sample."""
 
 
 @dataclass(frozen=True)
-class MetricPoint:
-    """One measured value at a moment in time."""
+class Sample:
+    """One metric observation."""
 
     ts: float
     family: str  # one of FAMILIES
-    name: str  # e.g. "tokens_used", "request_latency_ms", "findings_open"
+    name: str  # e.g. "tokens_used", "request_latency_ms"
     value: float
-    unit: str = ""  # "tokens", "ms", "count", "usd", …
-    campaign_id: str | None = None
+    campaign_id: str | None = None  # None = system-wide
     agent_id: str | None = None
-    tags: dict[str, str] = field(default_factory=dict)  # e.g. {"model": "m1"}
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "ts": self.ts,
-            "family": self.family,
-            "name": self.name,
-            "value": self.value,
-            "unit": self.unit,
-            "campaign_id": self.campaign_id,
-            "agent_id": self.agent_id,
-            "tags": self.tags,
-        }
-
-    @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> MetricPoint:
-        return cls(
-            ts=d["ts"],
-            family=d["family"],
-            name=d["name"],
-            value=d["value"],
-            unit=d.get("unit", ""),
-            campaign_id=d.get("campaign_id"),
-            agent_id=d.get("agent_id"),
-            tags=d.get("tags") or {},
-        )
-
-
-@dataclass
-class MetricQuery:
-    """Filter criteria for ``MetricsStore.query`` — all AND-combined."""
-
-    family: str | None = None
-    name: str | None = None
-    campaign_id: str | None = None
-    agent_id: str | None = None
-    since: float | None = None
-    until: float | None = None
-
-    def matches(self, p: MetricPoint) -> bool:
-        if self.family is not None and p.family != self.family:
-            return False
-        if self.name is not None and p.name != self.name:
-            return False
-        if self.campaign_id is not None and p.campaign_id != self.campaign_id:
-            return False
-        if self.agent_id is not None and p.agent_id != self.agent_id:
-            return False
-        if self.since is not None and p.ts < self.since:
-            return False
-        if self.until is not None and p.ts > self.until:
-            return False
-        return True
-
-
-def aggregate(points: list[MetricPoint], agg: str) -> float:
-    """Aggregate a point list. ``pct`` returns the average as a percentage
-    (0-100 scale assumed for the underlying values)."""
-    if agg not in AGGREGATIONS:
-        raise ValueError(f"unknown aggregation '{agg}'")
-    if agg == "count":
-        return float(len(points))
-    if not points:
-        return 0.0
-    values = [p.value for p in points]
-    if agg == "sum":
-        return sum(values)
-    if agg == "avg":
-        return sum(values) / len(values)
-    if agg == "min":
-        return min(values)
-    if agg == "max":
-        return max(values)
-    if agg == "pct":
-        return sum(values) / len(values)
-    raise ValueError(f"unknown aggregation '{agg}'")
+    tags: dict[str, str] = field(default_factory=dict)  # e.g. provider/model
 
 
 class MetricsStore:
-    """Append-only local time-series store with a query/aggregation API."""
+    """In-memory time-series store with campaign/time-range queries."""
 
-    def __init__(self, path: str | Path | None = None) -> None:
-        # JSONL replay on init keeps startup O(file) with zero dependencies;
-        # torn final lines (crash mid-write) are tolerated like logs.py.
-        self.path = Path(path) if path else None
-        self.points: list[MetricPoint] = []
-        self._lock = threading.Lock()
-        if self.path and self.path.exists():
-            with self.path.open(encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        self.points.append(MetricPoint.from_dict(json.loads(line)))
-                    except (json.JSONDecodeError, KeyError):
-                        continue
+    def __init__(self) -> None:
+        # One flat append-only list: queries scan it linearly, which is fine
+        # at local-first scale and keeps prune() trivially correct.
+        self._samples: list[Sample] = []
 
     def record(
         self,
@@ -150,79 +64,132 @@ class MetricsStore:
         name: str,
         value: float,
         *,
-        unit: str = "",
+        ts: float | None = None,
         campaign_id: str | None = None,
         agent_id: str | None = None,
         tags: dict[str, str] | None = None,
-        ts: float | None = None,
-    ) -> MetricPoint:
-        """Append one metric point (persisted before returning when a file
-        is configured — same persist-before-deliver rule as the event store)."""
+    ) -> Sample:
         if family not in FAMILIES:
-            raise ValueError(f"unknown metric family '{family}' (expected one of {FAMILIES})")
-        pt = MetricPoint(
-            ts=ts if ts is not None else time.time(),
+            raise MetricsError(f"unknown metric family '{family}' (expected one of {FAMILIES})")
+        s = Sample(
+            ts=time.time() if ts is None else ts,
             family=family,
             name=name,
             value=float(value),
-            unit=unit,
             campaign_id=campaign_id,
             agent_id=agent_id,
-            tags=tags or {},
+            tags=dict(tags or {}),
         )
-        with self._lock:
-            self.points.append(pt)
-            if self.path is not None:
-                self.path.parent.mkdir(parents=True, exist_ok=True)
-                with self.path.open("a", encoding="utf-8") as f:
-                    f.write(json.dumps(pt.to_dict(), sort_keys=True) + "\n")
-        return pt
+        self._samples.append(s)
+        return s
 
-    def query(self, flt: MetricQuery | None = None) -> list[MetricPoint]:
-        """Snapshot of matching points ordered by time."""
-        flt = flt or MetricQuery()
-        with self._lock:
-            pts = [p for p in self.points if flt.matches(p)]
-        return sorted(pts, key=lambda p: p.ts)
+    def _select(
+        self,
+        family: str | None = None,
+        name: str | None = None,
+        campaign_id: str | None = None,
+        include_global: bool = True,
+        since: float | None = None,
+        until: float | None = None,
+        tags: dict[str, str] | None = None,
+        agent_id: str | None = None,
+    ) -> list[Sample]:
+        """Shared filter used by both aggregate() and raw()."""
+        out = []
+        for s in self._samples:
+            if family and s.family != family:
+                continue
+            if name and s.name != name:
+                continue
+            if agent_id and s.agent_id != agent_id:
+                continue
+            if campaign_id is not None:
+                # Campaign-scoped query optionally folds in global (None)
+                # samples — e.g. system health alongside per-campaign usage.
+                if s.campaign_id is not None:
+                    if s.campaign_id != campaign_id:
+                        continue
+                elif not include_global:
+                    continue
+            if since is not None and s.ts < since:
+                continue
+            if until is not None and s.ts > until:
+                continue
+            if tags:
+                if any(s.tags.get(k) != v for k, v in tags.items()):
+                    continue
+            out.append(s)
+        return out
+
+    def raw(self, **kw: Any) -> list[Sample]:
+        """Matching samples in insertion order (time-ascending by contract)."""
+        return self._select(**kw)
 
     def aggregate(
         self,
         agg: str,
-        flt: MetricQuery | None = None,
-    ) -> float:
-        """Aggregate matching points in one locked pass."""
-        if agg not in AGGREGATIONS:
-            raise ValueError(f"unknown aggregation '{agg}'")
-        return aggregate(self.query(flt), agg)
+        **filters: Any,
+    ) -> float | int | None:
+        """Aggregate matching samples: sum/avg/min/max/count/p50/p95."""
+        values = [s.value for s in self._select(**filters)]
+        if agg == "count":
+            return len(values)
+        if not values:
+            return None
+        vs = sorted(values)
+        if agg == "sum":
+            return sum(values)
+        if agg == "avg":
+            return sum(values) / len(values)
+        if agg == "min":
+            return vs[0]
+        if agg == "max":
+            return vs[-1]
+        if agg in ("p50", "p95"):
+            # Nearest-rank percentile; deterministic, no interpolation.
+            import math
 
-    def series(
+            rank = math.ceil((0.5 if agg == "p50" else 0.95) * len(vs))
+            return vs[max(rank - 1, 0)]
+        raise MetricsError(f"unknown aggregation '{agg}'")
+
+    def group_by(
         self,
-        bucket_seconds: float,
+        key: str,
         agg: str,
-        flt: MetricQuery | None = None,
-    ) -> list[tuple[float, float]]:
-        """Bucketed time series [(bucket_start_ts, aggregated_value)] for UI
-        charts. Empty buckets are omitted."""
-        pts = self.query(flt)
-        if not pts:
-            return []
-        buckets: dict[int, list[MetricPoint]] = {}
-        for p in pts:
-            buckets.setdefault(int(p.ts // bucket_seconds) * int(bucket_seconds), []).append(p)
-        return sorted((start, aggregate(group, agg)) for start, group in buckets.items())
+        **filters: Any,
+    ) -> dict[str, float | int]:
+        """Aggregate grouped by a tag (or 'campaign_id'/'agent_id').
+
+        Powers the usage/cost pages' breakdowns without N+1 queries.
+        """
+        out: dict[str, list[float]] = {}
+        for s in self._select(**filters):
+            k = getattr(s, key, None) if hasattr(Sample, key) else s.tags.get(key)
+            out.setdefault(str(k), []).append(s.value)
+        result: dict[str, float | int] = {}
+        for g, vals in out.items():
+            vs = sorted(vals)
+            if agg == "count":
+                result[g] = len(vs)
+            elif agg == "sum":
+                result[g] = sum(vs)
+            elif agg == "avg":
+                result[g] = sum(vs) / len(vs)
+            elif agg == "min":
+                result[g] = vs[0]
+            elif agg == "max":
+                result[g] = vs[-1]
+            else:
+                raise MetricsError(f"unknown aggregation '{agg}'")
+        return result
 
     def prune(self, older_than_ts: float) -> int:
-        """Drop points older than the cutoff (§16 retention alignment).
-        Returns the number removed. Rewrites the file so pruning survives
-        restarts."""
-        removed = 0
-        with self._lock:
-            keep = [p for p in self.points if p.ts >= older_than_ts]
-            removed = len(self.points) - len(keep)
-            self.points = keep
-            if self.path is not None and removed:
-                self.path.parent.mkdir(parents=True, exist_ok=True)
-                with self.path.open("w", encoding="utf-8") as f:
-                    for p in keep:
-                        f.write(json.dumps(p.to_dict(), sort_keys=True) + "\n")
-        return removed
+        """Drop samples older than the cutoff (§16 retention wiring)."""
+        keep = [s for s in self._samples if s.ts >= older_than_ts]
+        dropped = len(self._samples) - len(keep)
+        self._samples = keep
+        return dropped
+
+    def __len__(self) -> int:
+        return len(self._samples)
