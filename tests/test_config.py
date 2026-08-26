@@ -50,6 +50,35 @@ class TestValidConfigs:
         )
         assert errors == []
 
+    def test_review_mode_options(self, tmp_path):
+        cfg, errors = load_config_collect(
+            _write(
+                tmp_path,
+                {
+                    "review": {
+                        "quorum": 3,
+                        "mode": "discussion_first",
+                        "require_all_accept": False,
+                        "require_model_family_diversity": True,
+                        "max_rereviews": 2,
+                    },
+                },
+            )
+        )
+        assert errors == []
+        assert cfg.review.mode == "discussion_first"
+        assert cfg.review.require_model_family_diversity is True
+        assert cfg.review.max_rereviews == 2
+        assert cfg.review.quorum == 3
+
+    def test_invalid_review_mode(self, tmp_path):
+        _, errors = load_config_collect(_write(tmp_path, {"review": {"mode": "chaos"}}))
+        assert any("review.mode" in e for e in errors)
+
+    def test_invalid_max_rereviews(self, tmp_path):
+        _, errors = load_config_collect(_write(tmp_path, {"review": {"max_rereviews": -1}}))
+        assert any("review.max_rereviews" in e for e in errors)
+
 
 class TestInvalidConfigs:
     def test_missing_file(self, tmp_path):

@@ -118,6 +118,13 @@ class ScopePolicyConfig:
 class ReviewConfig:
     quorum: int = 2
     require_independent_reviewers: bool = True
+    # Review-mode & quorum policy (PLAN §10.2/§10.5, issue #197). Mirrors
+    # policy.review_mode.ReviewModeConfig; kept as plain fields so config
+    # loading stays independent of the policy engine.
+    mode: str = "independent_first"
+    require_all_accept: bool = False
+    require_model_family_diversity: bool = False
+    max_rereviews: int = 1
 
 
 @dataclass
@@ -427,6 +434,27 @@ def validate_dict(raw: Any) -> tuple[Config, list[str]]:
                 cfg.review.require_independent_reviewers = rir
             else:
                 _err(errors, "review.require_independent_reviewers", "must be a boolean")
+        mode = rv.get("mode")
+        if mode is not None:
+            if isinstance(mode, str) and mode in ("independent_first", "discussion_first"):
+                cfg.review.mode = mode
+            else:
+                _err(errors, "review.mode", "must be 'independent_first' or 'discussion_first'")
+        raa = rv.get("require_all_accept")
+        if raa is not None:
+            if isinstance(raa, bool):
+                cfg.review.require_all_accept = raa
+            else:
+                _err(errors, "review.require_all_accept", "must be a boolean")
+        rmfd = rv.get("require_model_family_diversity")
+        if rmfd is not None:
+            if isinstance(rmfd, bool):
+                cfg.review.require_model_family_diversity = rmfd
+            else:
+                _err(errors, "review.require_model_family_diversity", "must be a boolean")
+        mrr = _opt_int(rv, "max_rereviews", "review.max_rereviews", errors, min_v=0)
+        if mrr is not None and not any("review.max_rereviews" in e for e in errors):
+            cfg.review.max_rereviews = mrr
     else:
         _err(errors, "review", "must be a mapping")
 

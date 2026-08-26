@@ -20,7 +20,7 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["cli", "agents", "api", "config", "findings", "fixtures", "observability",
   "orchestrator", "policy", "providers", "routers", "schemas", "search",
-  "storage", "tools", "ui"]
+"storage", "tools", "ui"]
 
 [dependency-groups]
 dev = [
