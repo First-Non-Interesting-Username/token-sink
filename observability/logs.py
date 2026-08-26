@@ -30,6 +30,8 @@ import json
 import time
 import uuid
 from collections.abc import Callable
+from contextlib import contextmanager
+from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -56,6 +58,83 @@ def new_correlation_id() -> str:
     return str(uuid.uuid4())
 
 
+@dataclass(frozen=True)
+class LogContext:
+    """Ambient correlation context attached to every record written in scope.
+
+    Carries the IDs that tie a log line back to the work it belongs to:
+    correlation ID (one per user-visible operation), plus the agent task,
+    event, and finding it touches. Stored in a ContextVar so asyncio tasks
+    and threads inherit it without threading parameters through every call
+    (issue #209).
+    """
+
+    correlation_id: str | None = None
+    campaign_id: str | None = None
+    agent_id: str | None = None
+    task_id: str | None = None
+    event_id: str | int | None = None
+    finding_id: str | None = None
+
+    def merged(self, **overrides: Any) -> LogContext:
+        """Copy with non-None override values applied (inner scope wins)."""
+        fields = {f: getattr(self, f) for f in self.__dataclass_fields__}
+        for k, v in overrides.items():
+            if v is not None and k in fields:
+                fields[k] = v
+        return LogContext(**fields)
+
+
+# Module-level ambient context. ContextVar means each asyncio task gets its
+# own copy at spawn time — a child task's set_log_context cannot leak back
+# into its parent, and unrelated tasks stay isolated. LogContext is immutable
+# (frozen dataclass), so sharing one default instance is safe despite B039.
+_current_context: ContextVar[LogContext] = ContextVar(
+    "log_correlation_context",
+    default=LogContext(),  # noqa: B039 — frozen dataclass
+)
+
+
+def get_log_context() -> LogContext:
+    """The ambient LogContext for the current execution context."""
+    return _current_context.get()
+
+
+def set_log_context(ctx: LogContext) -> Token:
+    """Replace the ambient context; returns a token for reset_log_context."""
+    return _current_context.set(ctx)
+
+
+def reset_log_context(token: Token) -> None:
+    _current_context.reset(token)
+
+
+@contextmanager
+def log_context(**fields: Any):
+    """Scoped context manager: merges fields into the ambient context.
+
+    Example::
+
+        with log_context(correlation_id=cid, campaign_id=camp):
+            log.info("agent", "started")  # carries cid + camp automatically
+    """
+    token = set_log_context(get_log_context().merged(**fields))
+    try:
+        yield get_log_context()
+    finally:
+        reset_log_context(token)
+
+
+def current_correlation_id() -> str | None:
+    """Shorthand used by callers that need just the correlation ID."""
+    return _current_context.get().correlation_id
+
+
+def new_log_context(correlation_id: str | None = None, **fields: Any) -> LogContext:
+    """Fresh context with a generated correlation ID unless one is given."""
+    return LogContext(correlation_id=correlation_id or new_correlation_id(), **fields)
+
+
 @dataclass
 class LogRecord:
     """One structured log entry (JSON-line serializable)."""
@@ -67,6 +146,11 @@ class LogRecord:
     correlation_id: str | None = None
     campaign_id: str | None = None
     agent_id: str | None = None
+    # Work-unit linkage so one operation's records can be joined across
+    # subsystems (issue #209): the agent task, event-store entry, and finding.
+    task_id: str | None = None
+    event_id: str | int | None = None
+    finding_id: str | None = None
     # Sanitized detail: safe for display everywhere.
     detail: dict[str, Any] | None = None
     # Extended internal diagnostics: only persisted/emitted when debug=True.
@@ -81,6 +165,9 @@ class LogRecord:
             "correlation_id": self.correlation_id,
             "campaign_id": self.campaign_id,
             "agent_id": self.agent_id,
+            "task_id": self.task_id,
+            "event_id": self.event_id,
+            "finding_id": self.finding_id,
             "detail": self.detail,
         }
         if include_internal:
@@ -89,7 +176,9 @@ class LogRecord:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> LogRecord:
-        return cls(**data)
+        # Tolerate records written before task/event/finding fields existed.
+        known = set(cls.__dataclass_fields__)
+        return cls(**{k: v for k, v in data.items() if k in known})
 
 
 def _level_num(level: str) -> int:
@@ -137,24 +226,36 @@ class StructuredLogger:
         correlation_id: str | None = None,
         campaign_id: str | None = None,
         agent_id: str | None = None,
+        task_id: str | None = None,
+        event_id: str | int | None = None,
+        finding_id: str | None = None,
         detail: dict[str, Any] | None = None,
         detail_internal: dict[str, Any] | None = None,
     ) -> LogRecord | None:
         """Write one record through the redaction gate. Returns the record,
-        or None when filtered out by level."""
+        or None when filtered out by level.
+
+        Correlation fields not passed explicitly fall back to the ambient
+        LogContext (issue #209) so subsystems inherit IDs without threading
+        them through every signature. An explicit argument always wins.
+        """
         if level not in LEVELS:
             raise ValueError(f"unknown level '{level}'")
         if not self._enabled(component, level):
             return None
+        ambient = get_log_context()
         try:
             rec = LogRecord(
                 ts=time.time(),
                 level=level,
                 component=component,
                 message=message,
-                correlation_id=correlation_id,
-                campaign_id=campaign_id,
-                agent_id=agent_id,
+                correlation_id=correlation_id or ambient.correlation_id,
+                campaign_id=campaign_id or ambient.campaign_id,
+                agent_id=agent_id or ambient.agent_id,
+                task_id=task_id or ambient.task_id,
+                event_id=event_id or ambient.event_id,
+                finding_id=finding_id or ambient.finding_id,
                 detail=_redact_value(detail, self.redactor),
                 # Internal detail is gated behind debug AND redacted too — it
                 # may carry stack context but still must not carry secrets.
@@ -278,6 +379,8 @@ class LogFilter:
     correlation_id: str | None = None
     agent_id: str | None = None
     campaign_id: str | None = None
+    task_id: str | None = None
+    finding_id: str | None = None
     level: str | None = None  # minimum level
     component: str | None = None
     since: float | None = None
@@ -290,6 +393,10 @@ class LogFilter:
         if self.agent_id and rec.agent_id != self.agent_id:
             return False
         if self.campaign_id and rec.campaign_id != self.campaign_id:
+            return False
+        if self.task_id and rec.task_id != self.task_id:
+            return False
+        if self.finding_id and rec.finding_id != self.finding_id:
             return False
         if self.level and _level_num(rec.level) < _level_num(self.level):
             return False
@@ -343,10 +450,14 @@ def render_human(records: list[LogRecord]) -> str:
         corr = f" corr={r.correlation_id}" if r.correlation_id else ""
         camp = f" campaign={r.campaign_id}" if r.campaign_id else ""
         agt = f" agent={r.agent_id}" if r.agent_id else ""
+        task = f" task={r.task_id}" if r.task_id else ""
+        fnd = f" finding={r.finding_id}" if r.finding_id else ""
         det = ""
         if r.detail:
             det = " " + json.dumps(r.detail, sort_keys=True)
-        rows.append(f"{ts} [{r.level:<8}] {r.component}: {r.message}{corr}{camp}{agt}{det}")
+        rows.append(
+            f"{ts} [{r.level:<8}] {r.component}: {r.message}{corr}{camp}{agt}{task}{fnd}{det}"
+        )
     return "\n".join(rows)
 
 
