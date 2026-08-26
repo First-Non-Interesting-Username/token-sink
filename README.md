@@ -30,6 +30,8 @@ acceptance criteria) and its phased roadmap.
   conventions, adding providers/tests/docs.
 - [docs/idempotency.md](docs/idempotency.md) — idempotent task execution:
   journal-first side effects and exactly-once semantics (issue #126).
+- [docs/usage-ledger.md](docs/usage-ledger.md) — usage accounting ledger:
+  crash-safe journaling, reconciliation, aggregation API (issue #275).
 
 ## For AI agents
 
