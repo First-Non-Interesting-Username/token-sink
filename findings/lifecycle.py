@@ -51,6 +51,11 @@ class State(StrEnum):
     VULNERABILITIES = "vulnerabilities"
     QUARANTINED = "quarantined"
     DELETED = "deleted"
+    # Issue #263: explicit false-positive terminal state. Reaching it requires
+    # a REQUIRED justification plus dual-confirmation consensus (see
+    # classify_false_positive); the record is preserved for recurrence
+    # linking and score feedback, never erased.
+    FALSE_POSITIVE = "false_positive"
 
 
 # The linear happy path from PLAN §10.
@@ -73,13 +78,15 @@ ALLOWED_TRANSITIONS: dict[State, list[State]] = {
     # A first review concluding "incorrect" can be disputed independently;
     # the disputed path is handled by ReviewGate logic below, so from
     # review_cycle_1 we either advance or stay pending dispute resolution.
-    # review_cycle_1: advance, or tombstone via dual-confirmation deletion
-    # (§10.2). DELETED is terminal.
+    # review_cycle_1: advance, tombstone via dual-confirmation deletion
+    # (§10.2), or classify false_positive (issue #263, consensus enforced in
+    # classify_false_positive). DELETED and FALSE_POSITIVE are terminal.
     State.REVIEW_CYCLE_1: [
         State.VALIDATED_OR_DISPUTED,
         State.DELETED,
+        State.FALSE_POSITIVE,
     ],
-    State.VALIDATED_OR_DISPUTED: [State.IMPACT_ANALYSIS],
+    State.VALIDATED_OR_DISPUTED: [State.IMPACT_ANALYSIS, State.FALSE_POSITIVE],
     State.IMPACT_ANALYSIS: [State.POC_DRAFT],
     State.POC_DRAFT: [State.POC_REVIEW],
     # All-four-reject may quarantine OR revert to post-first-review state
@@ -99,6 +106,13 @@ ALLOWED_TRANSITIONS: dict[State, list[State]] = {
     ],
     # Tombstones are terminal — nothing transitions out of deleted.
     State.DELETED: [],
+    # Issue #263: any live state may be classified false_positive once an
+    # "incorrect" review conclusion exists (the method enforces consensus);
+    # FP is terminal — adjudicated FPs stay as reference material for
+    # recurrence detection and score feedback.
+    # FP is terminal for the normal pipeline; only the explicit contest path
+    # (contest_false_positive) reopens it for re-review.
+    State.FALSE_POSITIVE: [State.VALIDATED_OR_DISPUTED],
 }
 
 # States in which a lease must currently be held to act on a finding.
@@ -155,6 +169,13 @@ class Finding:
     state: State = State.INITIAL_FINDINGS
     reviews: list[dict[str, Any]] = field(default_factory=list)
     poc_reviews: list[dict[str, Any]] = field(default_factory=list)
+    # Issue #263 FP-lifecycle bookkeeping. justification is REQUIRED before a
+    # finding may be labeled false_positive; fp_confirmed_by records the
+    # second (independent) consensus reviewer; recurrent_of links back to an
+    # earlier adjudicated FP when the same root cause is re-discovered.
+    false_positive_justification: str = ""
+    fp_confirmed_by: str | None = None
+    recurrent_of_uuid: str | None = None
 
     @classmethod
     def create(cls, campaign_uuid: str, title: str, **kwargs: Any) -> Finding:
@@ -640,6 +661,65 @@ class FindingLifecycle:
             finding,
             State.VALIDATED_OR_DISPUTED,
             reason="quarantine_released_new_evidence",
+            actor_uuid=actor_uuid,
+        )
+
+    def classify_false_positive(
+        self,
+        finding_uuid: str,
+        confirming_reviewer_uuid: str,
+        justification: str,
+    ) -> LifecycleResult:
+        """Issue #263: label a finding false_positive with required consensus.
+
+        Consensus rule (mirrors the repo's dual-confirmation posture): the
+        finding must already carry an "incorrect" review conclusion, and the
+        confirming reviewer must be a DISTINCT agent from every prior
+        reviewer. An empty/whitespace justification is refused — an FP label
+        without a written rationale is exactly the failure mode this issue
+        exists to close. The record is preserved (terminal state, no
+        tombstone) so recurrence detection and score feedback can use it.
+        """
+        if not justification or not justification.strip():
+            raise LifecycleError("false-positive classification requires a written justification")
+        finding = self._get(finding_uuid)
+        assert_not_deleted(finding)
+        # Allowed from any state where a first-review "incorrect" could exist
+        # and the finding is still live — not just review_cycle_1.
+        incorrect = any(r.get("conclusion") == "incorrect" for r in finding.reviews)
+        if not incorrect:
+            raise LifecycleError(
+                "false-positive classification requires an 'incorrect' review conclusion"
+            )
+        require_distinct_reviewer(finding, confirming_reviewer_uuid)
+        finding.false_positive_justification = justification.strip()
+        finding.fp_confirmed_by = confirming_reviewer_uuid
+        return self._transition(
+            finding,
+            State.FALSE_POSITIVE,
+            reason="false_positive_confirmed_with_justification",
+            actor_uuid=confirming_reviewer_uuid,
+            payload={"justification": finding.false_positive_justification},
+        )
+
+    def contest_false_positive(
+        self, finding_uuid: str, actor_uuid: str, reason: str
+    ) -> LifecycleResult:
+        """Reopen an FP classification for re-review (issue #263 escalation).
+
+        Moves the record back to validated_or_disputed with the contest
+        reason in history; the original FP adjudication remains visible as
+        prior reviews so the re-review starts from full context.
+        """
+        finding = self._get(finding_uuid)
+        if finding.state != State.FALSE_POSITIVE:
+            raise LifecycleError("contest requires state=false_positive")
+        if not reason.strip():
+            raise LifecycleError("contesting an FP requires a stated reason")
+        return self._transition(
+            finding,
+            State.VALIDATED_OR_DISPUTED,
+            reason=f"false_positive_contested: {reason}",
             actor_uuid=actor_uuid,
         )
 
