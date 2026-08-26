@@ -33,6 +33,31 @@ over versioned finding records with an append-only transition history.
 - **Final output (§10.6).** `finalize_report` only fires after final_review
   passed (state `vulnerabilities`). Submission to external programs stays a
   human-approved action outside this module by design.
+- **False-positive lifecycle (issue #263).** A finding becomes
+  `false_positive` only via `classify_false_positive`, which REQUIRES a
+  written justification (empty/whitespace raises) and dual-confirmation
+  consensus: an "incorrect" review conclusion must already exist and the
+  confirming reviewer must be a distinct agent (`require_distinct_reviewer`).
+  Reachable from `review_cycle_1` and `validated_or_disputed`. The state is
+  terminal for the normal pipeline; `contest_false_positive` reopens it back
+  to `validated_or_disputed` with the contest reason in history. Adjudicated
+  FPs keep full record + audit trail — they are reference material, not
+  deleted work.
+
+## False-positive feedback loops (issue #263)
+
+`findings/false_positive.py` closes the downstream loop:
+
+- **Score feedback (§8.3).** `record_fp_score_feedback` records a FAILURE
+  observation in the `false_positive_detection` score category attributed to
+  the discovering agent's model, so FP-heavy models rank lower over time.
+- **Research metrics (§14).** `record_fp_metrics` emits `research`-family
+  samples into the shared MetricsStore; aggregate queries derive the
+  false-positive rate from them.
+- **Recurrence detection.** `find_recurrent_fp` links a newly discovered
+  finding to an already-adjudicated FP when dedup's root-cause fingerprint
+  matches exactly (conservative: look-alikes are reviewed fresh). Linked
+  findings set `recurrent_of_uuid` instead of restarting the review cycle.
 
 ## Tests
 
@@ -42,3 +67,7 @@ policies, blocking objections, quarantine/revert/release, append-only
 history, and content-hash tamper detection.
 
 Run with: `python -m pytest tests/test_lifecycle.py`
+
+`tests/unit/test_false_positive_lifecycle.py` covers the issue #263 flows:
+justification enforcement, consensus rules, contest/reopen, recurrence
+linking, score feedback attribution, and metric emission.

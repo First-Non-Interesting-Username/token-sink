@@ -30,6 +30,7 @@ KNOWN_SECTIONS = {
     "server",
     "storage",
     "providers",
+    "custom_endpoints",
     "router",
     "agents",
     "search",
@@ -75,6 +76,32 @@ class ProvidersConfig:
     model_allowlist: list[str] = field(default_factory=list)
     free_only: bool = True
     credentials: dict[str, str] = field(default_factory=dict)  # provider -> env var name
+
+
+# User-declared cost classification for a custom endpoint. Unlike the
+# maintained catalog (§8.1), the tool cannot verify pricing on an arbitrary
+# OpenAI-compatible server, so anything other than an explicit declaration
+# stays "unknown" — and unknown is blocked under free_only (fail closed).
+COST_CLASSES = ("free", "paid", "unknown")
+
+
+@dataclass
+class CustomEndpoint:
+    """A user-defined OpenAI-compatible endpoint (PLAN Phase 3, §8.2).
+
+    ``api_key_env_var`` is a *reference* to an environment variable holding
+    the key — never the key itself (PLAN §15/§16 credential refs).
+    """
+
+    name: str
+    base_url: str
+    models: list[str] = field(default_factory=list)
+    # "free" | "paid" | "unknown"; user-declared, defaults to unknown.
+    cost_class: str = "unknown"
+    api_key_env_var: str | None = None
+    requests_per_min: int | None = None
+    concurrency: int | None = None
+    timeout_s: int = 120
 
 
 @dataclass
@@ -147,6 +174,7 @@ class Config:
     server: ServerConfig = field(default_factory=ServerConfig)
     storage: StorageConfig = field(default_factory=StorageConfig)
     providers: ProvidersConfig = field(default_factory=ProvidersConfig)
+    custom_endpoints: list[CustomEndpoint] = field(default_factory=list)
     router: RouterConfig = field(default_factory=RouterConfig)
     agents: AgentsConfig = field(default_factory=AgentsConfig)
     search: SearchConfig = field(default_factory=SearchConfig)
@@ -322,6 +350,104 @@ def validate_dict(raw: Any) -> tuple[Config, list[str]]:
                 cfg.providers.credentials = creds
     else:
         _err(errors, "providers", "must be a mapping")
+
+    # -- custom endpoints (PLAN Phase 3, §8.2) ------------------------------
+    # User-defined OpenAI-compatible servers. Validation is strict because a
+    # bad endpoint config surfaces at 3am in a worker, not at startup.
+    ce = raw.get("custom_endpoints") or []
+    if isinstance(ce, list):
+        seen_names: set[str] = set()
+        for i, ep in enumerate(ce):
+            key = f"custom_endpoints[{i}]"
+            if not isinstance(ep, dict):
+                _err(errors, key, "must be a mapping")
+                continue
+            name = ep.get("name")
+            if not isinstance(name, str) or not name.strip():
+                _err(errors, f"{key}.name", "required non-empty string")
+            elif name in seen_names:
+                _err(errors, f"{key}.name", f"duplicate endpoint name '{name}'")
+            else:
+                seen_names.add(name)
+            base = ep.get("base_url")
+            if not isinstance(base, str) or not base.strip():
+                _err(errors, f"{key}.base_url", "required non-empty string")
+            elif not (base.startswith("http://") or base.startswith("https://")):
+                # Loopback http is legitimate for local gateways; remote
+                # plaintext would carry the API key unencrypted.
+                _err(errors, f"{key}.base_url", "must start with http:// or https://")
+            models = ep.get("models", [])
+            if not isinstance(models, list) or not all(isinstance(m, str) for m in models):
+                _err(errors, f"{key}.models", "must be a list of strings")
+            cost = ep.get("cost_class", "unknown")
+            if cost not in COST_CLASSES:
+                _err(
+                    errors,
+                    f"{key}.cost_class",
+                    f"must be one of {', '.join(COST_CLASSES)} (got '{cost}'); "
+                    "classification is user-declared for custom endpoints",
+                )
+            env_var = ep.get("api_key_env_var")
+            if env_var is not None:
+                if not isinstance(env_var, str) or not env_var.isidentifier() or env_var.islower():
+                    _err(
+                        errors,
+                        f"{key}.api_key_env_var",
+                        f"'{env_var}' does not look like an env var name "
+                        "(keys are references, never literal values — PLAN §15)",
+                    )
+                elif env_var not in os.environ:
+                    _err(
+                        errors,
+                        f"{key}.api_key_env_var",
+                        f"referenced env var '{env_var}' is not set",
+                    )
+            rpm = ep.get("requests_per_min")
+            if rpm is not None and (not isinstance(rpm, int) or isinstance(rpm, bool) or rpm < 1):
+                _err(errors, f"{key}.requests_per_min", "must be an integer >= 1")
+            conc = ep.get("concurrency")
+            if conc is not None and (
+                not isinstance(conc, int) or isinstance(conc, bool) or conc < 1
+            ):
+                _err(errors, f"{key}.concurrency", "must be an integer >= 1")
+            to = ep.get("timeout_s")
+            if to is not None and (not isinstance(to, int) or isinstance(to, bool) or to < 1):
+                _err(errors, f"{key}.timeout_s", "must be an integer >= 1")
+            # Only append when this endpoint contributed no errors, so a
+            # broken entry never reaches runtime half-validated.
+            ep_errors = [e for e in errors if e.startswith(f"custom_endpoints[{i}")]
+            if not ep_errors and name and base:
+                cfg.custom_endpoints.append(
+                    CustomEndpoint(
+                        name=name,
+                        base_url=base,
+                        models=models,
+                        cost_class=cost,
+                        api_key_env_var=env_var,
+                        requests_per_min=rpm,
+                        concurrency=conc,
+                        timeout_s=to if to is not None else 120,
+                    )
+                )
+        # Fail closed on free_only: unknown-cost custom endpoints must never
+        # be routed when the operator asked for free providers only (#66).
+        if cfg.providers.free_only:
+            for ep2 in cfg.custom_endpoints:
+                if ep2.cost_class == "unknown":
+                    _err(
+                        errors,
+                        f"custom_endpoints(name={ep2.name})",
+                        "cost_class defaults to 'unknown'; set it explicitly — "
+                        "unknown-status endpoints are blocked under free_only mode",
+                    )
+                elif ep2.cost_class == "paid":
+                    _err(
+                        errors,
+                        f"custom_endpoints(name={ep2.name})",
+                        "paid endpoint configured while providers.free_only=true",
+                    )
+    else:
+        _err(errors, "custom_endpoints", "must be a list of endpoint mappings")
 
     # -- router ------------------------------------------------------------
     r = raw.get("router") or {}
