@@ -18,6 +18,7 @@ from typing import Any
 from policy.ratelimit import AcquireResult, RateLimiter
 from policy.scope import ACTIVE_TEST_CLASSES, HARD_PROHIBITED_ACTIONS, ScopePolicy
 from policy.ssrf import SSRFGuard
+from policy.target_health import TargetHealthTracker
 
 
 class ScopeStatus(enum.Enum):
@@ -94,11 +95,17 @@ class PolicyEngine:
         self,
         scope: ScopePolicy | None,
         ssrf_guard: SSRFGuard | None = None,
+        target_health: TargetHealthTracker | None = None,
         rate_limiter: RateLimiter | None = None,
     ):
         self.scope = scope
         self._scope_status = assess_scope(scope)
         self._ssrf = ssrf_guard or SSRFGuard()
+        # Target-health gate (#116): a target in distress is blocked at the
+        # policy layer regardless of scope — politeness is not configurable
+        # away by campaign settings. Optional so existing callers/tests that
+        # don't care keep working unchanged.
+        self.target_health = target_health or TargetHealthTracker()
         # Canonical rule set derived from the scope's TargetSpecs (#134):
         # subdomain inclusion defaults to opt-in False; the raw matcher in
         # step 7 keeps its legacy behavior, this one is authoritative.
@@ -276,6 +283,19 @@ class PolicyEngine:
                     ["target_unlisted"],
                 )
             del match  # matched spec kept for future rate-limit keying
+
+            # 8. Target-health gate (#116): after scope says the target is
+            # allowed, the target's own distress state still vetoes ACTIVE
+            # testing. Read-only reconnaissance stays available so operators
+            # can observe a recovering target without poking it further.
+            if effective_class in ACTIVE_TEST_CLASSES:
+                allowed, reason = self.target_health.check_active_allowed(request.target)
+                if not allowed:
+                    return self._block(
+                        request,
+                        f"target health: {reason}",
+                        ["target_health_blocked"],
+                    )
 
             if request.target.lower().startswith(("http://", "https://")):
                 verdict = self._ssrf.check(request.target)
