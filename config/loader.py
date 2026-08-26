@@ -118,11 +118,13 @@ class ScopePolicyConfig:
 class ReviewConfig:
     quorum: int = 2
     require_independent_reviewers: bool = True
-    # Review-mode & quorum policy (PLAN §10.2/§10.5, issue #197). Mirrors
-    # policy.review_mode.ReviewModeConfig; kept as plain fields so config
-    # loading stays independent of the policy engine.
+    # Review-mode & quorum policy (PLAN 10.2/10.5, issue #197) + panel/quorum
+    # knobs. Mirrors policy.review_mode.ReviewModeConfig; kept as plain fields
+    # so config loading stays independent of the policy engine.
     mode: str = "independent_first"
+    panel_size: int = 4
     require_all_accept: bool = False
+    forbid_blocking_objections: bool = True
     require_model_family_diversity: bool = False
     max_rereviews: int = 1
 
@@ -440,12 +442,21 @@ def validate_dict(raw: Any) -> tuple[Config, list[str]]:
                 cfg.review.mode = mode
             else:
                 _err(errors, "review.mode", "must be 'independent_first' or 'discussion_first'")
+        panel = _opt_int(rv, "panel_size", "review.panel_size", errors, min_v=1)
+        if panel is not None and not any("review.panel_size" in e for e in errors):
+            cfg.review.panel_size = panel
         raa = rv.get("require_all_accept")
         if raa is not None:
             if isinstance(raa, bool):
                 cfg.review.require_all_accept = raa
             else:
                 _err(errors, "review.require_all_accept", "must be a boolean")
+        fbo = rv.get("forbid_blocking_objections")
+        if fbo is not None:
+            if isinstance(fbo, bool):
+                cfg.review.forbid_blocking_objections = fbo
+            else:
+                _err(errors, "review.forbid_blocking_objections", "must be a boolean")
         rmfd = rv.get("require_model_family_diversity")
         if rmfd is not None:
             if isinstance(rmfd, bool):
