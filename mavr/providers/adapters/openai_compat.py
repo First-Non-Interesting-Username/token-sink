@@ -250,7 +250,9 @@ def _extract_response(data: Any) -> tuple[str, UsageInfo, list[dict[str, Any]], 
         first = choices[0]
         if isinstance(first, dict):
             message = first.get("message") or {}
-            content = str(message.get("content") or "")
+            # Streaming chunks carry their content under "delta" instead
+            # of "message" — read whichever is present.
+            content = str(message.get("content") or first.get("delta", {}).get("content") or "")
             tool_calls = list(message.get("tool_calls") or [])
             finish = str(first.get("finish_reason") or finish)
     usage_meta = data.get("usage") or {}
