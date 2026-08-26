@@ -27,6 +27,8 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
+from findings.deletion_guard import assert_not_deleted, require_distinct_reviewer
+
 
 class LifecycleError(Exception):
     """Raised when an operation is invalid for the finding's current state."""
@@ -84,8 +86,12 @@ ALLOWED_TRANSITIONS: dict[State, list[State]] = {
     ],
     State.POLISHED_REPORT: [State.FINAL_REVIEW],
     State.FINAL_REVIEW: [State.VULNERABILITIES],
-    # Quarantine can be released back to post-first-review with new evidence.
-    State.QUARANTINED: [State.VALIDATED_OR_DISPUTED],
+    # Quarantine can be released back to post-first-review with new evidence,
+    # or tombstoned via dual-confirmation deletion (§10.5, issue #48).
+    State.QUARANTINED: [
+        State.VALIDATED_OR_DISPUTED,
+        State.DELETED,
+    ],
     # Tombstones are terminal — nothing transitions out of deleted.
     State.DELETED: [],
 }
@@ -381,11 +387,16 @@ class FindingLifecycle:
         attached). Never silently removes anything.
         """
         finding = self._get(finding_uuid)
+        assert_not_deleted(finding)
         if finding.state != State.REVIEW_CYCLE_1:
             raise LifecycleError("no dispute open outside review_cycle_1")
         first_incorrect = any(r.get("conclusion") == "incorrect" for r in finding.reviews)
         if not first_incorrect:
             raise LifecycleError("no 'incorrect' first-review conclusion on record")
+        # §10.2 independence: the dispute reviewer must be a distinct agent
+        # from every prior reviewer — an agent can never double-confirm its
+        # own 'incorrect' verdict into a deletion.
+        require_distinct_reviewer(finding, dispute_reviewer_uuid)
         finding.reviews.append(
             {
                 "cycle": 1,
@@ -544,9 +555,57 @@ class FindingLifecycle:
             actor_uuid=actor_uuid,
         )
 
+    def delete_from_quarantine(
+        self,
+        finding_uuid: str,
+        first_reviewer_uuid: str,
+        second_reviewer_uuid: str,
+        notes: str = "",
+    ) -> LifecycleResult:
+        """§10.5: quarantined findings follow the same dual-confirmation rule.
+
+        Permanent deletion of a quarantined finding requires two distinct
+        reviewers both concluding it is incorrect; the tombstone path is the
+        same as §10.2 (history preserved, never silently removed).
+        """
+        finding = self._get(finding_uuid)
+        assert_not_deleted(finding)
+        if finding.state != State.QUARANTINED:
+            raise LifecycleError("delete_from_quarantine requires state=quarantined")
+        if first_reviewer_uuid == second_reviewer_uuid:
+            raise LifecycleError("dual confirmation requires two distinct reviewers")
+        require_distinct_reviewer(finding, first_reviewer_uuid)
+        require_distinct_reviewer(finding, second_reviewer_uuid)
+        finding.reviews.append(
+            {
+                "kind": "quarantine_deletion_confirmation_1",
+                "reviewer": first_reviewer_uuid,
+                "conclusion": "incorrect",
+                "notes": notes,
+                "timestamp": _now(),
+            }
+        )
+        finding.reviews.append(
+            {
+                "kind": "quarantine_deletion_confirmation_2",
+                "reviewer": second_reviewer_uuid,
+                "conclusion": "incorrect",
+                "notes": notes,
+                "timestamp": _now(),
+            }
+        )
+        return self._transition(
+            finding,
+            State.DELETED,
+            reason="dual_confirmation_deletion_from_quarantine",
+            actor_uuid=second_reviewer_uuid,
+            payload={"tombstone": True},
+        )
+
     def release_quarantine(self, finding_uuid: str, actor_uuid: str) -> LifecycleResult:
         """New evidence arrived; resume from post-first-review state."""
         finding = self._get(finding_uuid)
+        assert_not_deleted(finding)
         return self._transition(
             finding,
             State.VALIDATED_OR_DISPUTED,
