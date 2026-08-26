@@ -34,6 +34,20 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="print the manifest JSON instead of only reporting success",
     )
+
+    finding = sub.add_parser("finding", help="finding inspection commands (issue #291)")
+    find_sub = finding.add_subparsers(dest="finding_command", required=True)
+    inspect = find_sub.add_parser(
+        "inspect", help="show a version diff for a finding (in-memory store demo)"
+    )
+    inspect.add_argument("finding_uuid", help="the finding to inspect")
+    inspect.add_argument(
+        "--diff",
+        nargs=2,
+        metavar=("FROM", "TO"),
+        type=int,
+        help="two version numbers, e.g. --diff 3 5",
+    )
     return parser
 
 
@@ -58,6 +72,26 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(manifest, indent=2))
         else:
             print(f"campaign manifest created: {manifest['campaign_uuid']}")
+        return 0
+    if args.command == "finding" and args.finding_command == "inspect":
+        if not args.diff:
+            print("error: --diff FROM TO is required")
+            return 2
+        # The CLI has no persistent store wired yet (storage backend lands in
+        # a separate issue); render against an empty store and report the
+        # unknown-finding error honestly rather than fabricating output.
+        from findings.lifecycle import RecordStore
+        from findings.version_snapshots import VersionNotFoundError, VersionSnapshotStore
+
+        snap = VersionSnapshotStore(RecordStore())
+        try:
+            d = snap.diff(args.finding_uuid, args.diff[0], args.diff[1])
+        except VersionNotFoundError as exc:
+            print(f"error: {exc.args[0]}")
+            return 1
+        from findings.version_snapshots import render_side_by_side
+
+        print(render_side_by_side(d))
         return 0
     return 2  # unreachable with required=True subparsers; defensive
 
