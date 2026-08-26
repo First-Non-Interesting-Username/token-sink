@@ -15,6 +15,7 @@ processes live in `docs/`, not here.**
 - [docs/safety-and-scope.md](docs/safety-and-scope.md) — scope authoring + policy enforcement reference.
 - [docs/contributor-guide.md](docs/contributor-guide.md) — contributor/developer guide.
 - [docs/testing.md](docs/testing.md) — how to run the test suite and what CI enforces.
+- [docs/benchmark-scores.md](docs/benchmark-scores.md) — how model scores, confidence intervals, and recency weighting are computed.
 
 ## Working rules
 
